@@ -6,6 +6,7 @@ RaisedSurface {
     id: root
 
     property string sourceKey: "ig"
+    property bool initializing: true
     signal filtersChanged(int regionIndex, int impactIndex,
                           bool dateEnabled, string dateText)
 
@@ -17,10 +18,19 @@ RaisedSurface {
     fillColor: Theme.surface
 
     function emitFilters() {
+        if (root.initializing)
+            return
         filtersChanged(region.currentIndex,
                        impact.currentIndex,
                        dateCheck.checked,
                        dateField.formatDate(dateField.selectedDate))
+    }
+
+    Component.onCompleted: {
+        region.currentIndex = bridge.filterRegionIndex(root.sourceKey)
+        impact.currentIndex = bridge.filterImpactIndex(root.sourceKey)
+        root.initializing = false
+        root.emitFilters()
     }
 
     RowLayout {

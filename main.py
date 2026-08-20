@@ -39,7 +39,7 @@ def main() -> int:
 
     # QApplication is retained because the tray menu uses Qt Widgets while
     # the application window itself is rendered by Qt Quick/QML.
-    app = QApplication(sys.argv)
+    app = QApplication([sys.argv[0]])
     app.setApplicationName(AppMeta.NAME)
     app.setApplicationDisplayName(AppMeta.DISPLAY_NAME)
     app.setApplicationVersion(AppMeta.VERSION)
@@ -49,11 +49,19 @@ def main() -> int:
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 
-    controller = AppController(settings)
+    controller = AppController(settings, debug=args.debug)
     bridge = CalendarBridge(controller)
+
+    # Tell the controller to stop accepting work before QML objects are torn
+    # down.  The final shutdown below then waits for/cancels executor work.
+    app.aboutToQuit.connect(controller.begin_shutdown)
 
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("bridge", bridge)
+    engine.rootContext().setContextProperty(
+        "trayAvailable",
+        TrayIconManager.is_available(),
+    )
 
     qml_file = Path(__file__).resolve().parent / "qml" / "Main.qml"
     engine.load(QUrl.fromLocalFile(str(qml_file)))
@@ -62,7 +70,11 @@ def main() -> int:
         return 1
 
     window = engine.rootObjects()[0]
-    tray_manager = TrayIconManager(window, bridge.refreshAll)
+    tray_manager = (
+        TrayIconManager(window, bridge.refreshAll)
+        if TrayIconManager.is_available()
+        else None
+    )
 
     # Keep QObject/controller helpers alive until app.exec() returns.
     _keep_alive = (engine, bridge, tray_manager, controller)

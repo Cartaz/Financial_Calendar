@@ -18,10 +18,20 @@ class TrayIconManager:
     ) -> None:
         self._window = window
         self._refresh_callback = refresh_callback
-        self._tray_icon = QSystemTrayIcon(self._create_icon())
+        self._tray_icon: QSystemTrayIcon | None = None
+
+        if not self.is_available():
+            return
+
+        tray = QSystemTrayIcon(self._create_icon())
+        self._tray_icon = tray
         self._setup_menu()
-        self._tray_icon.activated.connect(self._on_activated)
-        self._tray_icon.show()
+        tray.activated.connect(self._on_activated)
+        tray.show()
+
+    @staticmethod
+    def is_available() -> bool:
+        return QSystemTrayIcon.isSystemTrayAvailable()
 
     def _create_icon(self) -> QIcon:
         icon = QIcon.fromTheme("calendar")
@@ -32,6 +42,9 @@ class TrayIconManager:
         return icon
 
     def _setup_menu(self) -> None:
+        if self._tray_icon is None:
+            return
+
         menu = QMenu()
 
         show_action = QAction("Mostra", menu)
@@ -70,6 +83,8 @@ class TrayIconManager:
             self._window.raise_()
 
     def _hide_window(self) -> None:
+        if not self.is_available():
+            return
         if hasattr(self._window, "hide"):
             self._window.hide()
         else:
@@ -87,6 +102,8 @@ class TrayIconManager:
             self._refresh_callback()
 
     def show_message(self, title: str, message: str) -> None:
+        if self._tray_icon is None:
+            return
         self._tray_icon.showMessage(
             title,
             message,

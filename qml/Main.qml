@@ -17,11 +17,15 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Ctrl+Q"
-        onActivated: Qt.quit()
+        onActivated: {
+            bridge.beginShutdown()
+            Qt.quit()
+        }
     }
 
     Shortcut {
         sequence: "Ctrl+M"
+        enabled: trayAvailable
         onActivated: root.hide()
     }
 
@@ -36,6 +40,8 @@ ApplicationWindow {
         enabled: root.activeTab === 1
         onActivated: bridge.refresh("fxstreet")
     }
+
+    onClosing: bridge.beginShutdown()
 
     ColumnLayout {
         anchors.fill: parent
@@ -80,7 +86,7 @@ ApplicationWindow {
 
             NeoTabButton {
                 id: igTab
-                text: "IG Economic Calendar"
+                text: "ForexFactory Calendar"
                 selected: root.activeTab === 0
                 implicitWidth: 186
                 onClicked: root.activeTab = 0
@@ -114,8 +120,13 @@ ApplicationWindow {
 
     Connections {
         target: bridge
-        function onErrorMessage(message) {
-            console.warn("Calendar refresh error:", message)
+        function onIgErrorChanged() {
+            if (bridge.igError !== "")
+                console.warn("ForexFactory refresh error:", bridge.igError)
+        }
+        function onFxErrorChanged() {
+            if (bridge.fxError !== "")
+                console.warn("FXStreet refresh error:", bridge.fxError)
         }
     }
 }

@@ -11,6 +11,45 @@ Item {
     property string status: sourceKey === "ig" ? bridge.igStatus : bridge.fxStatus
     property string lastRefresh:
         sourceKey === "ig" ? bridge.igLastRefresh : bridge.fxLastRefresh
+    property string errorText:
+        sourceKey === "ig" ? bridge.igError : bridge.fxError
+
+    property var visualOrder: sourceKey === "ig"
+        ? [0, 1, 2, 3, 4, 5, 6, 7]
+        : [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    property bool restoringColumns: false
+
+    function logicalColumn(visualColumn) {
+        if (visualColumn < 0 || visualColumn >= root.visualOrder.length)
+            return visualColumn
+        return root.visualOrder[visualColumn]
+    }
+
+    function restoreColumnOrder() {
+        var desired = bridge.getColumnOrder(root.sourceKey)
+        if (!desired || desired.length !== root.visualOrder.length)
+            return
+
+        var current = []
+        for (var i = 0; i < root.visualOrder.length; ++i)
+            current.push(i)
+
+        root.restoringColumns = true
+        for (var visual = 0; visual < desired.length; ++visual) {
+            var wantedLogical = desired[visual]
+            var currentVisual = current.indexOf(wantedLogical)
+            if (currentVisual >= 0 && currentVisual !== visual) {
+                tableView.moveColumn(currentVisual, visual)
+                var moved = current.splice(currentVisual, 1)[0]
+                current.splice(visual, 0, moved)
+            }
+        }
+        root.visualOrder = current
+        root.restoringColumns = false
+        tableView.forceLayout()
+    }
+
+    Component.onCompleted: Qt.callLater(root.restoreColumnOrder)
 
     ColumnLayout {
         anchors.fill: parent
@@ -51,10 +90,15 @@ Item {
             StatusDot { state: root.status }
 
             Text {
-                text: "Ultimo aggiornamento: " + root.lastRefresh
-                color: Theme.textSecondary
+                Layout.maximumWidth: 680
+                text: root.status === "error"
+                    ? "Errore aggiornamento: " + root.errorText
+                      + " — ultimi dati: " + root.lastRefresh
+                    : "Ultimo aggiornamento: " + root.lastRefresh
+                color: root.status === "error" ? Theme.danger : Theme.textSecondary
                 font.pixelSize: 11
                 font.family: "monospace"
+                elide: Text.ElideRight
             }
 
             Item { Layout.fillWidth: true }
@@ -65,7 +109,7 @@ Item {
             Layout.preferredHeight: Theme.filterHeight
             sourceKey: root.sourceKey
             onFiltersChanged: function(regionIndex, impactIndex,
-                                        dateEnabled, dateText) {
+                                       dateEnabled, dateText) {
                 bridge.setFilters(root.sourceKey, regionIndex, impactIndex,
                                   dateEnabled, dateText)
             }
@@ -115,7 +159,13 @@ Item {
                         anchors.fill: parent
                         anchors.leftMargin: 8
                         anchors.rightMargin: 8
-                        text: display
+                        text: {
+                            var logical = root.logicalColumn(column)
+                            var marker = ""
+                            if (root.tableModel.sortColumnIndex === logical)
+                                marker = root.tableModel.sortAscending ? "  ↑" : "  ↓"
+                            return display + marker
+                        }
                         color: Theme.textSecondary
                         font.pixelSize: 10
                         font.family: "monospace"
@@ -126,7 +176,10 @@ Item {
 
                     TapHandler {
                         gesturePolicy: TapHandler.ReleaseWithinBounds
-                        onTapped: bridge.sortColumn(root.sourceKey, column)
+                        onTapped: bridge.sortColumn(
+                            root.sourceKey,
+                            root.logicalColumn(column)
+                        )
                     }
                 }
             }
@@ -157,6 +210,11 @@ Item {
                 }
             }
 
+            ItemSelectionModel {
+                id: tableSelection
+                model: root.tableModel
+            }
+
             TableView {
                 id: tableView
                 anchors.left: verticalHeader.right
@@ -169,11 +227,37 @@ Item {
                 columnSpacing: 1
                 reuseItems: true
 
+                selectionModel: tableSelection
+                selectionBehavior: TableView.SelectRows
+                selectionMode: TableView.SingleSelection
+                keyNavigationEnabled: true
+                pointerNavigationEnabled: true
+                activeFocusOnTab: true
+
                 columnWidthProvider: function(column) {
-                    var widths = root.sourceKey === "ig"
-                        ? [100, 66, 82, 108, 300, 90, 104, 104]
-                        : [100, 66, 82, 290, 92, 90, 82, 104, 104]
-                    return widths[column] || 100
+                    return bridge.preferredColumnWidth(
+                        root.sourceKey,
+                        root.logicalColumn(column)
+                    )
+                }
+
+                onColumnMoved: function(logicalIndex, oldVisualIndex, newVisualIndex) {
+                    var next = root.visualOrder.slice()
+                    if (oldVisualIndex >= 0 && oldVisualIndex < next.length
+                            && newVisualIndex >= 0 && newVisualIndex < next.length) {
+                        var moved = next.splice(oldVisualIndex, 1)[0]
+                        next.splice(newVisualIndex, 0, moved)
+                        root.visualOrder = next
+                    }
+                    if (!root.restoringColumns) {
+                        bridge.columnMoved(
+                            root.sourceKey,
+                            logicalIndex,
+                            oldVisualIndex,
+                            newVisualIndex
+                        )
+                    }
+                    tableView.forceLayout()
                 }
 
                 delegate: Rectangle {
@@ -182,11 +266,17 @@ Item {
                     required property var flagUrl
                     required property int column
                     required property int row
+                    required property bool selected
+                    required property bool current
+
+                    property int logicalColumnIndex: root.logicalColumn(column)
 
                     implicitHeight: 30
-                    color: row % 2 === 0 ? Theme.background : "#171717"
+                    color: selected
+                        ? "#242424"
+                        : (row % 2 === 0 ? Theme.background : "#171717")
                     border.width: 1
-                    border.color: Theme.divider
+                    border.color: current ? Theme.accent : Theme.divider
 
                     Row {
                         anchors.fill: parent
@@ -195,7 +285,8 @@ Item {
                         spacing: 6
 
                         Image {
-                            visible: column === 2 && flagUrl !== ""
+                            visible: parent.parent.logicalColumnIndex === 2
+                                     && flagUrl !== ""
                             width: visible ? 18 : 0
                             height: 12
                             anchors.verticalCenter: parent.verticalCenter
@@ -204,18 +295,22 @@ Item {
                         }
 
                         Text {
-                            width: parent.width - (column === 2 && flagUrl !== "" ? 24 : 0)
+                            width: parent.width
+                                   - (parent.parent.logicalColumnIndex === 2
+                                      && flagUrl !== "" ? 24 : 0)
                             height: parent.height
                             text: display
                             color: foreground
                             font.pixelSize: 11
                             font.weight:
-                                ((root.sourceKey === "ig" && column === 3)
-                                 || (root.sourceKey !== "ig" && column === 4))
+                                ((root.sourceKey === "ig"
+                                  && parent.parent.logicalColumnIndex === 3)
+                                 || (root.sourceKey !== "ig"
+                                     && parent.parent.logicalColumnIndex === 4))
                                 ? Font.DemiBold : Font.Normal
-                            horizontalAlignment: column === 2
-                                                 ? Text.AlignLeft
-                                                 : Text.AlignHCenter
+                            horizontalAlignment:
+                                parent.parent.logicalColumnIndex === 2
+                                ? Text.AlignLeft : Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
                         }

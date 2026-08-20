@@ -170,10 +170,13 @@ class Settings:
 
         normalized = _normalize_setting(key, value)
         with self._lock:
-            if getattr(self._data, key) == normalized:
+            previous = getattr(self._data, key)
+            if previous == normalized:
                 return True
             setattr(self._data, key, normalized)
             saved = self._save_locked()
+            if not saved:
+                setattr(self._data, key, previous)
 
         if saved:
             self._emit_config_changed(key, normalized)
@@ -189,5 +192,9 @@ class Settings:
 
     def reset(self) -> bool:
         with self._lock:
+            previous = self._data
             self._data = UserSettings()
-            return self._save_locked()
+            saved = self._save_locked()
+            if not saved:
+                self._data = previous
+            return saved
