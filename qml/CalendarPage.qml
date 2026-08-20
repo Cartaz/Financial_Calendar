@@ -160,9 +160,8 @@ Item {
                         anchors.leftMargin: 8
                         anchors.rightMargin: 8
                         text: {
-                            var logical = root.logicalColumn(column)
                             var marker = ""
-                            if (root.tableModel.sortColumnIndex === logical)
+                            if (root.tableModel.sortColumnIndex === column)
                                 marker = root.tableModel.sortAscending ? "  ↑" : "  ↓"
                             return display + marker
                         }
@@ -176,10 +175,7 @@ Item {
 
                     TapHandler {
                         gesturePolicy: TapHandler.ReleaseWithinBounds
-                        onTapped: bridge.sortColumn(
-                            root.sourceKey,
-                            root.logicalColumn(column)
-                        )
+                        onTapped: bridge.sortColumn(root.sourceKey, column)
                     }
                 }
             }
@@ -234,6 +230,8 @@ Item {
                 pointerNavigationEnabled: true
                 activeFocusOnTab: true
 
+                // columnWidthProvider receives the visual column position.
+                // Map that position exactly once to the logical model column.
                 columnWidthProvider: function(column) {
                     return bridge.preferredColumnWidth(
                         root.sourceKey,
@@ -269,7 +267,8 @@ Item {
                     required property bool selected
                     required property bool current
 
-                    property int logicalColumnIndex: root.logicalColumn(column)
+                    // Delegate `column` comes from the logical QModelIndex.
+                    property int logicalColumnIndex: column
 
                     implicitHeight: 30
                     color: selected
