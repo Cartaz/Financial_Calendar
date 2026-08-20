@@ -8,15 +8,15 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtGui import QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtWidgets import QApplication
 
 from config.constants import AppMeta, PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
-from ui.tray_icon import TrayIconManager
 from ui_qml.bridge import CalendarBridge
+from ui_qml.tray import TrayIconManager
 
 
 def _parse_args() -> argparse.Namespace:
@@ -37,9 +37,8 @@ def main() -> int:
     settings = Settings()
     settings.load()
 
-    # QApplication is intentionally retained instead of QGuiApplication:
-    # QSystemTrayIcon/QMenu still live in Qt Widgets, while the main window
-    # is rendered entirely by Qt Quick.
+    # QApplication is retained because the tray menu uses Qt Widgets while
+    # the application window itself is rendered by Qt Quick/QML.
     app = QApplication(sys.argv)
     app.setApplicationName(AppMeta.NAME)
     app.setApplicationDisplayName(AppMeta.DISPLAY_NAME)
@@ -65,7 +64,7 @@ def main() -> int:
     window = engine.rootObjects()[0]
     tray_manager = TrayIconManager(window, bridge.refreshAll)
 
-    # Local references live until app.exec() returns.
+    # Keep QObject/controller helpers alive until app.exec() returns.
     _keep_alive = (engine, bridge, tray_manager, controller)
 
     bridge.refreshAll()

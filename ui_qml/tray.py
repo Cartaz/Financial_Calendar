@@ -1,6 +1,8 @@
-"""System-tray integration shared by QWidget and QML/QQuickWindow frontends."""
+"""System-tray integration for the QML frontend."""
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
@@ -9,7 +11,11 @@ from config.constants import AppMeta
 
 
 class TrayIconManager:
-    def __init__(self, window: object, refresh_callback=None) -> None:
+    def __init__(
+        self,
+        window: object,
+        refresh_callback: Callable[[], None] | None = None,
+    ) -> None:
         self._window = window
         self._refresh_callback = refresh_callback
         self._tray_icon = QSystemTrayIcon(self._create_icon())
@@ -27,6 +33,7 @@ class TrayIconManager:
 
     def _setup_menu(self) -> None:
         menu = QMenu()
+
         show_action = QAction("Mostra", menu)
         show_action.triggered.connect(self._show_window)
         menu.addAction(show_action)

@@ -1,8 +1,4 @@
-"""Bridge between the existing Python controller and the QML UI.
-
-No scraper, model or business-rule logic is duplicated here.  The bridge
-only adapts controller data to Qt item models/properties consumable by QML.
-"""
+"""Bridge between the Python controller and the Qt Quick/QML frontend."""
 
 from __future__ import annotations
 
@@ -24,7 +20,7 @@ from PySide6.QtCore import (
 from config.constants import CalendarDefaults, PathConfig
 from core.app_controller import AppController
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
-from ui.widgets.table_sorting import compute_sort_key
+from ui_qml.sorting import compute_sort_key
 
 
 TIMEZONE_OFFSETS: list[tuple[str, float]] = [
@@ -47,7 +43,7 @@ TIMEZONE_OFFSETS: list[tuple[str, float]] = [
 
 
 class CalendarTableModel(QAbstractTableModel):
-    """Read-only calendar model used by QML TableView."""
+    """Read-only calendar model consumed by QML TableView."""
 
     ForegroundRole = int(Qt.ItemDataRole.UserRole) + 1
     FlagRole = ForegroundRole + 1
@@ -156,8 +152,6 @@ class CalendarTableModel(QAbstractTableModel):
                 else event.to_fxstreet_row()
             )
             raw = compute_sort_key(source_key, column, row[column], event)
-            # The legacy widget handled mixed numeric/string keys with a
-            # TypeError fallback.  A tuple gives QML the same robust behavior.
             if isinstance(raw, (int, float)):
                 return (0, raw)
             return (1, str(raw).lower())
@@ -326,9 +320,7 @@ class CalendarBridge(QObject):
 
     def _refresh_model(self, source: str) -> None:
         cfg = self._filters[source]
-        source_enum = (
-            CalendarSource.IG if source == "ig" else CalendarSource.FXSTREET
-        )
+        source_enum = CalendarSource.IG if source == "ig" else CalendarSource.FXSTREET
         events = self._controller.filter_events(
             source_enum,
             region=str(cfg["region"]),
