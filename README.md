@@ -1,6 +1,6 @@
 # Financial Calendar
 
-Desktop financial-calendar aggregator for **IG** and **FXStreet**, written in Python with a **Qt Quick/QML** frontend.
+Desktop financial-calendar aggregator for **ForexFactory/Faireconomy** and **FXStreet**, written in Python with a **Qt Quick/QML** frontend.
 
 The interface uses a dark neumorphic design system with an exact `#141414` application background, neutral grayscale surfaces, and `#FF6600` as the primary accent.
 
@@ -29,23 +29,27 @@ For a local desktop/menu installation on Arch/CachyOS:
 
 ## Keyboard shortcuts
 
-- `Ctrl+R` — refresh IG while the IG tab is active
+- `Ctrl+R` — refresh ForexFactory while the first tab is active
 - `Ctrl+F` — refresh FXStreet while the FXStreet tab is active
-- `Ctrl+M` — hide the main window
+- `Ctrl+M` — hide the main window when a system tray is available
 - `Ctrl+Q` — quit
 
 ## Features
 
-- IG and FXStreet economic calendars
+- ForexFactory/Faireconomy and FXStreet economic calendars
 - background refresh through a thread pool
 - date, region and impact filters
-- timezone conversion
+- timezone conversion from normalized UTC timestamps
 - semantic column sorting
-- draggable QML table headers
+- draggable and persisted QML table headers
 - country flags
 - system-tray integration
-- XDG-compatible persisted settings
+- atomically persisted XDG settings
 - dark neumorphic QML design system
+
+## Data-integrity rules
+
+Production refreshes never substitute fabricated sample data. Network, schema, or parsing failures keep the previous real data visible and put the affected source into an error state. All accepted event timestamps must contain an explicit timezone and are normalized to UTC before filtering or display conversion.
 
 ## Project structure
 
@@ -58,8 +62,6 @@ ui_qml/              Python/QML bridge, sorting and tray integration
 assets/               Icons and country flags
 install.sh            Local XDG/KDE installation helper
 ```
-
-The previous Qt Widgets/QSS presentation layer has been removed. There is now one frontend implementation: QML.
 
 ## Design system
 
@@ -87,8 +89,14 @@ Runtime data directories are created under the corresponding XDG paths.
 .venv/bin/python main.py --debug
 ```
 
-## Development notes
+Raw API payloads are saved to the XDG debug directory only when `--debug` is enabled.
 
-The business layer does not import the frontend. `AppController` communicates with `ui_qml.bridge.CalendarBridge` through notification callbacks marshalled into the Qt event loop.
+## Development
 
-When changing QML, keep the application geometry and workflow stable unless a functional change explicitly requires otherwise.
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+ruff check .
+pytest -q
+```
+
+CI additionally performs Python compilation, selected QML linting, and an offscreen QML startup smoke test.
