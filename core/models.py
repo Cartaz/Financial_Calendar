@@ -1,9 +1,4 @@
-"""Modelli dati per gli eventi del calendario finanziario.
-
-Definisce le strutture dati usate per rappresentare gli eventi
-economici provenienti da IG e FXStreet. Usa dataclass per
-immutabilità e type safety.
-"""
+"""Typed domain models for economic-calendar events."""
 
 from __future__ import annotations
 
@@ -12,15 +7,18 @@ from enum import Enum
 
 
 class CalendarSource(Enum):
-    """Fonte del calendario economico."""
+    """Economic-calendar data source.
 
+    ``IG`` remains an alias for the historical internal key so existing
+    persisted state and bridge bindings keep working.
+    """
+
+    FOREXFACTORY = "ig"
     IG = "ig"
     FXSTREET = "fxstreet"
 
 
 class ImpactLevel(Enum):
-    """Livello di impatto dell'evento economico."""
-
     HIGH = "HIGH"
     MID = "MID"
     LOW = "LOW"
@@ -28,23 +26,9 @@ class ImpactLevel(Enum):
 
 @dataclass(frozen=True)
 class CalendarEvent:
-    """Evento singolo del calendario economico.
+    """One economic-calendar event.
 
-    Attributes:
-        time: Orario dell'evento (formattato per visualizzazione).
-        country: Codice paese/regione (es. EUR, USA, JPN).
-        impact: Livello di impatto (HIGH, MID, LOW).
-        event_name: Nome descrittivo dell'evento.
-        actual: Valore attuale rilevato.
-        forecast: Valore previsto (IG) o consensus (FXStreet).
-        previous: Valore precedente.
-        date: Data dell'evento (formattata per visualizzazione).
-        utc_dt: Stringa ISO 8601 della data/ora UTC originale
-            (es. "2026-05-13T14:30:00+00:00"). Usata per la
-            conversione di fuso orario. Se vuota, la conversione
-            non è disponibile per questo evento.
-        deviation: Deviazione dal consensus (solo FXStreet).
-        source: Fonte del calendario (IG o FXStreet).
+    ``utc_dt`` is either an aware ISO-8601 UTC timestamp or an empty string.
     """
 
     time: str
@@ -57,15 +41,10 @@ class CalendarEvent:
     date: str = ""
     utc_dt: str = ""
     deviation: str = ""
-    source: CalendarSource = CalendarSource.IG
+    source: CalendarSource = CalendarSource.FOREXFACTORY
 
     def to_ig_row(self) -> list[str]:
-        """Converte l'evento in riga per tabella IG.
-
-        Returns:
-            Lista di valori [Data, Ora, Paese, Importanza, Evento,
-            Attuale, Previsione, Precedente].
-        """
+        """Compatibility row layout for the legacy ``ig``/ForexFactory tab."""
         impact_map = {
             ImpactLevel.HIGH: "ALTO",
             ImpactLevel.MID: "MEDIO",
@@ -82,13 +61,10 @@ class CalendarEvent:
             self.previous,
         ]
 
-    def to_fxstreet_row(self) -> list[str]:
-        """Converte l'evento in riga per tabella FXStreet.
+    def to_forexfactory_row(self) -> list[str]:
+        return self.to_ig_row()
 
-        Returns:
-            Lista di valori [Data, Ora, Paese, Evento, Impatto, Attuale,
-            Dev, Consensus, Precedente].
-        """
+    def to_fxstreet_row(self) -> list[str]:
         return [
             self.date,
             self.time,

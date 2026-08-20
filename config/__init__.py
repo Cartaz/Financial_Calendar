@@ -1,15 +1,12 @@
-"""Configuration package for Financial Calendar.
-
-The QML presentation theme lives in ``qml/Theme.js``. This package only
-exports application metadata, constants, paths and persisted settings.
-"""
+"""Application configuration package."""
 
 from config.constants import AppMeta, CalendarDefaults, PathConfig
-from config.settings import Settings
+from config.settings import Settings, UserSettings
 
 __all__ = [
     "AppMeta",
     "CalendarDefaults",
     "PathConfig",
     "Settings",
+    "UserSettings",
 ]

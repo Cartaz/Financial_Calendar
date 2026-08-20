@@ -1,15 +1,14 @@
-"""Impostazioni utente persistenti in formato JSON.
-
-Le impostazioni sono salvate nella directory XDG appropriata conforme
-alla specifica Freedesktop. Ogni modifica emette un evento config_changed
-tramite l'event bus (se disponibile).
-"""
+"""Thread-safe, atomically persisted user settings."""
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+import os
+import tempfile
+import threading
+from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 from typing import Any
 
 from config.constants import CalendarDefaults, PathConfig
@@ -17,122 +16,178 @@ from config.constants import CalendarDefaults, PathConfig
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class UserSettings:
-    """Schema delle impostazioni utente con valori predefiniti.
-
-    Attributes:
-        ig_column_order: Ordine delle colonne IG (lista di indici).
-        fxstreet_column_order: Ordine delle colonne FXStreet.
-        selected_region: Regione filtro selezionata.
-        selected_impact: Livello impatto filtro selezionato.
-        last_refresh_ig: Timestamp ultimo aggiornamento IG.
-        last_refresh_fxstreet: Timestamp ultimo aggiornamento FXStreet.
-    """
-
     ig_column_order: list[int] = field(
         default_factory=lambda: list(range(len(CalendarDefaults.IG_COLUMNS)))
     )
     fxstreet_column_order: list[int] = field(
         default_factory=lambda: list(range(len(CalendarDefaults.FXSTREET_COLUMNS)))
     )
-    selected_region: str = "ALL"
-    selected_impact: str = "ALL"
+
+    ig_selected_region: str = "ALL"
+    ig_selected_impact: str = "ALL"
+    fxstreet_selected_region: str = "ALL"
+    fxstreet_selected_impact: str = "ALL"
+
     last_refresh_ig: str = ""
     last_refresh_fxstreet: str = ""
 
 
-class Settings:
-    """Gestore delle impostazioni utente con persistenza JSON.
+_SETTINGS_FIELDS = {item.name for item in fields(UserSettings)}
 
-    Fornisce caricamento, salvataggio e accesso thread-safe alle
-    impostazioni. Ogni modifica emette un evento config_changed
-    tramite l'event bus (se disponibile).
-    """
+
+def _valid_column_order(value: object, count: int) -> list[int]:
+    if not isinstance(value, list):
+        raise ValueError("column order must be a list")
+    if any(not isinstance(item, int) for item in value):
+        raise ValueError("column order must contain integers")
+    if sorted(value) != list(range(count)):
+        raise ValueError("column order must be a complete permutation")
+    return list(value)
+
+
+def _normalize_setting(key: str, value: Any) -> Any:
+    if key == "ig_column_order":
+        return _valid_column_order(value, len(CalendarDefaults.IG_COLUMNS))
+    if key == "fxstreet_column_order":
+        return _valid_column_order(value, len(CalendarDefaults.FXSTREET_COLUMNS))
+
+    if key.endswith("_selected_region"):
+        text = str(value)
+        allowed = set(CalendarDefaults.REGIONS)
+        return text if text in allowed else "ALL"
+
+    if key.endswith("_selected_impact"):
+        text = str(value)
+        allowed = {"ALL", *CalendarDefaults.IMPACT_LEVELS}
+        return text if text in allowed else "ALL"
+
+    if key in {"last_refresh_ig", "last_refresh_fxstreet"}:
+        return str(value)
+
+    raise AttributeError(f"Impostazione sconosciuta: {key}")
+
+
+class Settings:
+    """Settings manager with serialized access and atomic replacement."""
 
     def __init__(self) -> None:
-        """Inizializza il gestore impostazioni con valori predefiniti."""
         self._data = UserSettings()
+        self._lock = threading.RLock()
 
     def load(self) -> None:
-        """Carica le impostazioni dal file JSON.
+        with self._lock:
+            try:
+                if not PathConfig.SETTINGS_FILE.exists():
+                    logger.info("Nessun file impostazioni trovato, uso valori predefiniti")
+                    return
 
-        Se il file non esiste o è corrotto, mantiene i valori predefiniti
-        e logga un avviso.
-        """
-        try:
-            if PathConfig.SETTINGS_FILE.exists():
-                with open(PathConfig.SETTINGS_FILE, "r", encoding="utf-8") as fh:
-                    raw: dict[str, Any] = json.load(fh)
-                self._data = UserSettings(**raw)
+                with open(PathConfig.SETTINGS_FILE, "r", encoding="utf-8") as handle:
+                    raw = json.load(handle)
+                if not isinstance(raw, dict):
+                    raise TypeError("settings root must be an object")
+
+                defaults = UserSettings()
+                normalized: dict[str, Any] = {}
+                for key in _SETTINGS_FIELDS:
+                    raw_value = raw.get(key, getattr(defaults, key))
+                    try:
+                        normalized[key] = _normalize_setting(key, raw_value)
+                    except (TypeError, ValueError):
+                        logger.warning(
+                            "Valore impostazione non valido per %s, uso default",
+                            key,
+                        )
+                        normalized[key] = getattr(defaults, key)
+
+                # Old versions persisted two global filter keys. Migrate them
+                # only when the new per-source keys are absent.
+                legacy_region = raw.get("selected_region")
+                legacy_impact = raw.get("selected_impact")
+                if legacy_region is not None:
+                    for key in ("ig_selected_region", "fxstreet_selected_region"):
+                        if key not in raw:
+                            normalized[key] = _normalize_setting(key, legacy_region)
+                if legacy_impact is not None:
+                    for key in ("ig_selected_impact", "fxstreet_selected_impact"):
+                        if key not in raw:
+                            normalized[key] = _normalize_setting(key, legacy_impact)
+
+                self._data = UserSettings(**normalized)
                 logger.info("Impostazioni caricate da %s", PathConfig.SETTINGS_FILE)
-            else:
-                logger.info("Nessun file impostazioni trovato, uso valori predefiniti")
-        except (json.JSONDecodeError, TypeError) as exc:
-            logger.warning("File impostazioni corrotto, uso valori predefiniti: %s", exc)
-            self._data = UserSettings()
+            except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                logger.warning(
+                    "Impossibile caricare le impostazioni, uso default: %s",
+                    exc,
+                )
+                self._data = UserSettings()
 
-    def save(self) -> None:
-        """Salva le impostazioni correnti nel file JSON."""
-        PathConfig.ensure_dirs()
+    def _save_locked(self) -> bool:
+        temp_path: Path | None = None
         try:
-            with open(PathConfig.SETTINGS_FILE, "w", encoding="utf-8") as fh:
-                json.dump(asdict(self._data), fh, indent=2, ensure_ascii=False)
-            logger.info("Impostazioni salvate in %s", PathConfig.SETTINGS_FILE)
+            PathConfig.ensure_dirs()
+            payload = asdict(self._data)
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=PathConfig.APP_CONFIG_DIR,
+                prefix=".settings.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temp_path = Path(handle.name)
+                json.dump(payload, handle, indent=2, ensure_ascii=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+
+            os.replace(temp_path, PathConfig.SETTINGS_FILE)
+            logger.debug("Impostazioni salvate in %s", PathConfig.SETTINGS_FILE)
+            return True
         except OSError as exc:
             logger.error("Errore nel salvataggio delle impostazioni: %s", exc)
+            if temp_path is not None:
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            return False
+
+    def save(self) -> bool:
+        with self._lock:
+            return self._save_locked()
 
     def get(self, key: str) -> Any:
-        """Recupera il valore di un'impostazione per chiave.
+        if key not in _SETTINGS_FIELDS:
+            raise AttributeError(f"Impostazione sconosciuta: {key}")
+        with self._lock:
+            value = getattr(self._data, key)
+            return list(value) if isinstance(value, list) else value
 
-        Args:
-            key: Nome dell'attributo in UserSettings.
+    def set(self, key: str, value: Any) -> bool:
+        if key not in _SETTINGS_FIELDS:
+            raise AttributeError(f"Impostazione sconosciuta: {key}")
 
-        Returns:
-            Il valore dell'impostazione richiesta.
+        normalized = _normalize_setting(key, value)
+        with self._lock:
+            if getattr(self._data, key) == normalized:
+                return True
+            setattr(self._data, key, normalized)
+            saved = self._save_locked()
 
-        Raises:
-            AttributeError: Se la chiave non esiste nello schema.
-        """
-        return getattr(self._data, key)
-
-    def set(self, key: str, value: Any) -> None:
-        """Imposta il valore di un'impostazione e salva.
-
-        Dopo il salvataggio, emette un evento config_changed tramite
-        l'event bus con la chiave e il nuovo valore.
-
-        Args:
-            key: Nome dell'attributo in UserSettings.
-            value: Nuovo valore da assegnare.
-
-        Raises:
-            AttributeError: Se la chiave non esiste nello schema.
-        """
-        setattr(self._data, key, value)
-        self.save()
-        self._emit_config_changed(key, value)
+        if saved:
+            self._emit_config_changed(key, normalized)
+        return saved
 
     def _emit_config_changed(self, key: str, value: Any) -> None:
-        """Emette l'evento config_changed tramite l'event bus.
-
-        Usa un import differito per evitare dipendenze circolari
-        a livello di modulo.
-
-        Args:
-            key: Chiave dell'impostazione modificata.
-            value: Nuovo valore assegnato.
-        """
         try:
             from core.event_bus import EventBus
-            bus = EventBus()
-            bus.emit("config_changed", {"key": key, "value": str(value)})
-            logger.debug("Evento config_changed emesso: %s=%s", key, value)
+
+            EventBus().emit("config_changed", {"key": key, "value": str(value)})
         except Exception as exc:
             logger.debug("Impossibile emettere config_changed: %s", exc)
 
-    def reset(self) -> None:
-        """Ripristina tutte le impostazioni ai valori predefiniti."""
-        self._data = UserSettings()
-        self.save()
-        logger.info("Impostazioni ripristinate ai valori predefiniti")
+    def reset(self) -> bool:
+        with self._lock:
+            self._data = UserSettings()
+            return self._save_locked()
