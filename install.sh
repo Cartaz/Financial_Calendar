@@ -60,7 +60,7 @@ cat > "${DESKTOP_FILE}" << EOF
 [Desktop Entry]
 Type=Application
 Name=Calendario Finanziario
-Comment=Visualizzatore di calendari economici IG e FXStreet
+Comment=Visualizzatore di calendari economici ForexFactory/Faireconomy e FXStreet
 Exec=${WRAPPER_SCRIPT}
 Icon=financial-calendar
 Terminal=false
