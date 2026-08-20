@@ -1,17 +1,15 @@
-"""Modulo di configurazione dell'applicazione.
+"""Configuration package for Financial Calendar.
 
-Contiene costanti, tema e impostazioni. È il livello più basso
-dell'architettura e non importa da nessun altro modulo dell'app.
+The QML presentation theme lives in ``qml/Theme.js``. This package only
+exports application metadata, constants, paths and persisted settings.
 """
 
-from config.theme import ThemeColors
-from config.constants import AppMeta, UIConstraints, CalendarDefaults
+from config.constants import AppMeta, CalendarDefaults, PathConfig
 from config.settings import Settings
 
 __all__ = [
-    "ThemeColors",
     "AppMeta",
-    "UIConstraints",
     "CalendarDefaults",
+    "PathConfig",
     "Settings",
 ]
