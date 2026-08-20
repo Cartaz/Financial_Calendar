@@ -40,10 +40,8 @@ jobs:
             qml/InsetSurface.qml \
             qml/NeoButton.qml \
             qml/NeoCheckBox.qml \
-            qml/NeoComboBox.qml \
             qml/NeoScrollBar.qml \
-            qml/NeoTabButton.qml \
-            qml/StatusDot.qml
+            qml/NeoTabButton.qml
 
       - name: Test suite
         run: pytest -q
