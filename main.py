@@ -76,15 +76,19 @@ def main() -> int:
         else None
     )
 
-    # The main stack frame remains alive for the whole Qt event loop; keep a
-    # deliberate dummy reference so the tray helper cannot be collected.
-    _keep_alive_ = (engine, bridge, tray_manager, controller)
-
+    # These local references remain alive for the whole main() stack frame,
+    # including the blocking Qt event loop. No extra keep-alive variable is
+    # required, and keeping the named locals avoids premature collection.
     bridge.refreshAll()
 
     exit_code = app.exec()
     controller.shutdown()
     settings.save()
+
+    # Explicitly touch the optional tray helper after the event loop so static
+    # analyzers and future refactors both preserve its lifetime through exec().
+    if tray_manager is not None:
+        del tray_manager
     return exit_code
 
 
