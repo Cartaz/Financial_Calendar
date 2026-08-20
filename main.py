@@ -53,7 +53,7 @@ def main() -> int:
     bridge = CalendarBridge(controller)
 
     # Tell the controller to stop accepting work before QML objects are torn
-    # down.  The final shutdown below then waits for/cancels executor work.
+    # down. The final shutdown below then waits for/cancels executor work.
     app.aboutToQuit.connect(controller.begin_shutdown)
 
     engine = QQmlApplicationEngine()
@@ -76,8 +76,9 @@ def main() -> int:
         else None
     )
 
-    # Keep QObject/controller helpers alive until app.exec() returns.
-    _keep_alive = (engine, bridge, tray_manager, controller)
+    # The main stack frame remains alive for the whole Qt event loop; keep a
+    # deliberate dummy reference so the tray helper cannot be collected.
+    _keep_alive_ = (engine, bridge, tray_manager, controller)
 
     bridge.refreshAll()
 
