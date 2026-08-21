@@ -82,19 +82,15 @@ function regionLabel(value) {
 }
 
 function formatOffset(offset) {
-  const sign = offset >= 0 ? "+" : "−";
+  const sign = offset >= 0 ? "+" : "-";
   const absolute = Math.abs(offset);
   const hours = Math.floor(absolute);
   const minutes = Math.round((absolute - hours) * 60);
   return `UTC${sign}${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-function currentTimezoneOffset() {
-  if (els.timezone.value === "local") {
-    return -new Date().getTimezoneOffset() / 60;
-  }
-  const parsed = Number(els.timezone.value);
-  return Number.isFinite(parsed) ? parsed : 0;
+function currentTimezoneSpec() {
+  return els.timezone.value || "UTC";
 }
 
 function calendarDateToBackend(value) {
@@ -116,20 +112,45 @@ function buildSelect(select, values, labeler) {
 
 function buildTimezoneSelect() {
   els.timezone.replaceChildren();
-  const localOffset = -new Date().getTimezoneOffset() / 60;
+  const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
   const local = document.createElement("option");
-  local.value = "local";
-  local.textContent = `Locale (${formatOffset(localOffset)})`;
+  local.value = localZone;
+  local.textContent = `Locale (${localZone})`;
   els.timezone.append(local);
 
-  for (let offset = -12; offset <= 14; offset += 0.5) {
+  const namedZones = [
+    "UTC",
+    "Europe/Rome",
+    "Europe/London",
+    "America/New_York",
+    "America/Chicago",
+    "America/Los_Angeles",
+    "Asia/Tokyo",
+    "Asia/Shanghai",
+    "Asia/Hong_Kong",
+    "Asia/Singapore",
+    "Asia/Kolkata",
+    "Australia/Sydney",
+    "Pacific/Auckland",
+  ];
+
+  for (const zone of namedZones) {
+    if (zone === localZone) continue;
     const option = document.createElement("option");
-    option.value = String(offset);
-    option.textContent = offset === 0 ? "UTC" : formatOffset(offset);
+    option.value = zone;
+    option.textContent = zone;
     els.timezone.append(option);
   }
-  els.timezone.value = "local";
+
+  for (let offset = -12; offset <= 14; offset += 0.5) {
+    if (offset === 0) continue;
+    const option = document.createElement("option");
+    option.value = formatOffset(offset);
+    option.textContent = `${formatOffset(offset)} (fisso)`;
+    els.timezone.append(option);
+  }
+  els.timezone.value = localZone;
 }
 
 function setConnectionReady(version) {
@@ -182,10 +203,21 @@ function updateActivityState() {
     els.activityLabel.textContent = `Aggiornamento ${source?.name || "sorgente"} in corso…`;
   } else if (!els.errorBanner.hidden) {
     els.sourceStatus.classList.add("is-error");
-    els.sourceStatusLabel.textContent = "Errore aggiornamento";
-  } else {
+    if (source?.data_origin === "cache") {
+      els.sourceStatusLabel.textContent = "Errore · dati salvati";
+    } else if (source?.data_origin === "network") {
+      els.sourceStatusLabel.textContent = "Errore · dati precedenti";
+    } else {
+      els.sourceStatusLabel.textContent = "Errore · nessun dato";
+    }
+  } else if (source?.data_origin === "cache") {
     els.sourceStatus.classList.add("is-ready");
-    els.sourceStatusLabel.textContent = "Dati disponibili";
+    els.sourceStatusLabel.textContent = "Dati salvati";
+  } else if (source?.data_origin === "network") {
+    els.sourceStatus.classList.add("is-ready");
+    els.sourceStatusLabel.textContent = "Dati aggiornati";
+  } else {
+    els.sourceStatusLabel.textContent = "In attesa dati";
   }
 }
 
@@ -415,12 +447,12 @@ async function loadEvents() {
 
   try {
     const events = await bridgeCall(
-      "getEvents",
+      "getEventsInTimezone",
       sourceKey,
       els.region.value || "ALL",
       els.impact.value || "ALL",
       calendarDateToBackend(els.date.value),
-      currentTimezoneOffset(),
+      currentTimezoneSpec(),
     );
     if (requestId !== state.requestSerial || sourceKey !== state.activeSource) return;
     state.events = normalizeList(events);
@@ -468,6 +500,8 @@ function updateSourceRefresh(sourceKey, payload) {
   const source = sourceState(sourceKey);
   if (!source) return;
   if (payload.last_refresh !== undefined) source.last_refresh = payload.last_refresh;
+  if (payload.last_refresh_iso !== undefined) source.last_refresh_iso = payload.last_refresh_iso;
+  if (payload.data_origin !== undefined) source.data_origin = payload.data_origin;
   source.refreshing = false;
 }
 
@@ -487,7 +521,7 @@ async function handleBackendEvent(eventName, payload) {
     updateSourceRefresh(sourceKey, payload || {});
     if (sourceKey === state.activeSource) {
       hideError();
-      els.lastRefresh.textContent = sourceState()?.last_refresh || payload.timestamp || "mai";
+      els.lastRefresh.textContent = sourceState()?.last_refresh || "mai";
       await loadEvents();
       showToast(`${sourceState()?.name || "Calendario"}: ${payload.count ?? 0} eventi aggiornati`);
     }
