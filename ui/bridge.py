@@ -192,6 +192,7 @@ class CalendarBridge(QObject):
         date: str,
         tz_offset_hours: float,
     ) -> list[dict[str, str]]:
+        """Compatibility query using a fixed UTC offset."""
         source = self._source(source_key)
         events = self._controller.filter_events(
             source,
@@ -199,6 +200,26 @@ class CalendarBridge(QObject):
             impact=impact,
             date=date,
             tz_offset_hours=tz_offset_hours,
+        )
+        return [self._event_to_map(event) for event in events]
+
+    @Slot(str, str, str, str, str, result="QVariantList")
+    def getEventsInTimezone(
+        self,
+        source_key: str,
+        region: str,
+        impact: str,
+        date: str,
+        timezone_name: str,
+    ) -> list[dict[str, str]]:
+        """Query events using an IANA timezone or an explicit UTC offset spec."""
+        source = self._source(source_key)
+        events = self._controller.filter_events(
+            source,
+            region=region,
+            impact=impact,
+            date=date,
+            timezone_name=timezone_name,
         )
         return [self._event_to_map(event) for event in events]
 
