@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtWidgets import QApplication
 
@@ -39,23 +41,32 @@ def test_webengine_frontend_loads_offscreen(monkeypatch, tmp_path) -> None:
     runtime_loop = QEventLoop()
 
     def on_runtime(value) -> None:
-        runtime.append(dict(value) if isinstance(value, dict) else {})
+        if isinstance(value, str):
+            runtime.append(json.loads(value))
+        else:
+            runtime.append({"probe_error": f"unexpected callback: {value!r}"})
         runtime_loop.quit()
 
     window.view.page().runJavaScript(
         """
-        (() => ({
-          search: Boolean(document.getElementById('event-search')),
-          quickButtons: document.querySelectorAll('[data-quick-range]').length,
-          navigationState: typeof state !== 'undefined' && Boolean(state.navigation),
-          navigationFunction: typeof navigationFilteredEvents === 'function',
-          fixedOffsetDate: isoDateInTimezone(
-            new Date('2026-03-29T23:30:00Z'),
-            'UTC+02:00'
-          ),
-          nextDay: addCalendarDays('2026-03-29', 1),
-          countdown: formatCountdown(90 * 60 * 1000),
-        }))()
+        JSON.stringify((() => {
+          try {
+            return {
+              search: Boolean(document.getElementById('event-search')),
+              quickButtons: document.querySelectorAll('[data-quick-range]').length,
+              navigationState: typeof state !== 'undefined' && Boolean(state.navigation),
+              navigationFunction: typeof navigationFilteredEvents === 'function',
+              fixedOffsetDate: isoDateInTimezone(
+                new Date('2026-03-29T23:30:00Z'),
+                'UTC+02:00'
+              ),
+              nextDay: addCalendarDays('2026-03-29', 1),
+              countdown: formatCountdown(90 * 60 * 1000),
+            };
+          } catch (error) {
+            return { probe_error: String(error) };
+          }
+        })())
         """,
         on_runtime,
     )
@@ -66,6 +77,7 @@ def test_webengine_frontend_loads_offscreen(monkeypatch, tmp_path) -> None:
         assert loaded and loaded[-1] is True
         assert window.bridge.getInitialState()["app"]["name"] == "Calendario Finanziario"
         assert runtime
+        assert "probe_error" not in runtime[-1], runtime[-1].get("probe_error")
         assert runtime[-1]["search"] is True
         assert runtime[-1]["quickButtons"] == 4
         assert runtime[-1]["navigationState"] is True
