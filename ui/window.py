@@ -1,4 +1,4 @@
-"""Qt desktop shell hosting the native HTML/CSS/JavaScript frontend."""
+"""Qt desktop shell hosting the HTML/CSS/JavaScript frontend."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 from config.constants import AppMeta, PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
-from web_ui.bridge import CalendarBridge
+from ui.bridge import CalendarBridge
 
 
 class CalendarWindow(QMainWindow):
@@ -58,9 +58,9 @@ class CalendarWindow(QMainWindow):
         self.channel.registerObject("bridge", self.bridge)
         self.view.page().setWebChannel(self.channel)
 
-        web_dir = Path(__file__).resolve().parent.parent / "web"
-        frontend = web_dir / "index.html"
-        viewport_css = web_dir / "viewport.css"
+        ui_dir = Path(__file__).resolve().parent
+        frontend = ui_dir / "index.html"
+        viewport_css = ui_dir / "viewport.css"
         if not frontend.exists():
             raise RuntimeError(f"Frontend HTML non trovato: {frontend}")
         if not viewport_css.exists():
@@ -75,9 +75,8 @@ class CalendarWindow(QMainWindow):
         if app is not None:
             self._add_shortcut("Ctrl+Q", app.quit)
 
-
     def _install_viewport_styles(self, css: str) -> None:
-        """Inject viewport constraints at document-ready without altering business logic."""
+        """Inject viewport constraints at document-ready."""
         source = f"""
             (() => {{
                 const style = document.createElement('style');

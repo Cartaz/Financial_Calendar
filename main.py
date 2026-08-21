@@ -11,8 +11,8 @@ from PySide6.QtWidgets import QApplication
 from config.constants import AppMeta, PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
-from web_ui.bridge import WebLogHandler
-from web_ui.window import CalendarWindow
+from ui.bridge import WebLogHandler
+from ui.window import CalendarWindow
 
 
 def _parse_args() -> argparse.Namespace:
@@ -46,7 +46,7 @@ def main() -> int:
     try:
         window = CalendarWindow(controller, settings, debug=args.debug)
     except Exception:
-        logging.getLogger(__name__).exception("Impossibile inizializzare la UI web")
+        logging.getLogger(__name__).exception("Impossibile inizializzare la UI")
         controller.shutdown()
         settings.save()
         return 1
