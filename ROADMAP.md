@@ -8,9 +8,9 @@ Questa roadmap raccoglie gli sviluppi pianificati dopo la stabilizzazione della 
 - [x] Avvio offline con caricamento immediato degli ultimi dati reali disponibili.
 - [x] Mantenimento dei dati precedenti quando un refresh fallisce.
 - [x] Timestamp dei nuovi refresh salvati in formato ISO-8601 UTC.
-- [ ] Stato UI che distingue visivamente dati da rete, dati salvati e assenza di dati.
-- [ ] Conversione timezone DST-safe basata su timezone IANA invece di un singolo offset numerico.
-- [ ] Test di regressione sui cambi ora legale/solare.
+- [x] Stato UI che distingue visivamente dati da rete, dati salvati e assenza di dati.
+- [x] Conversione timezone DST-safe basata su timezone IANA invece di un singolo offset numerico.
+- [x] Test di regressione sui cambi ora legale/solare.
 
 Criterio di completamento: il programma deve essere utilizzabile anche senza rete dopo almeno un refresh riuscito e deve mostrare orari corretti attraverso transizioni DST.
 
