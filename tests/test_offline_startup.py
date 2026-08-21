@@ -59,6 +59,37 @@ def test_controller_and_bridge_start_with_cached_data(monkeypatch, tmp_path) -> 
         controller.shutdown()
 
 
+def test_failed_refresh_keeps_cached_events_available(monkeypatch, tmp_path) -> None:
+    _redirect_paths(monkeypatch, tmp_path)
+    refreshed_at = "2026-08-21T10:30:00+00:00"
+    assert CalendarCache().save(
+        CalendarSource.FOREXFACTORY,
+        [_future_event()],
+        refreshed_at,
+    )
+
+    controller = AppController(Settings())
+    future: Future = Future()
+    future.set_exception(RuntimeError("offline"))
+    refreshing = threading.Event()
+    refreshing.set()
+
+    try:
+        controller._complete_refresh(  # noqa: SLF001 - deterministic lifecycle test
+            future,
+            CalendarSource.FOREXFACTORY,
+            refreshing,
+        )
+
+        assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "cache"
+        assert controller.get_last_refresh(CalendarSource.FOREXFACTORY) == refreshed_at
+        events = controller.filter_events(CalendarSource.FOREXFACTORY)
+        assert len(events) == 1
+        assert events[0].event_name == "Offline cached event"
+    finally:
+        controller.shutdown()
+
+
 def test_successful_refresh_replaces_cache_and_uses_utc_timestamp(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
