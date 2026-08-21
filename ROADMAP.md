@@ -16,13 +16,13 @@ Criterio di completamento: il programma deve essere utilizzabile anche senza ret
 
 ## 1.3 — Aggiornamento e persistenza UX
 
-- [ ] Auto-refresh configurabile: Manuale / 5 / 15 / 30 / 60 minuti.
-- [ ] Indicatore di freschezza per sorgente.
-- [ ] Persistenza della sorgente attiva.
-- [ ] Persistenza della timezone scelta.
-- [ ] Persistenza della data selezionata.
-- [ ] Persistenza di ordinamento colonna e direzione.
-- [ ] Persistenza opzionale di dimensione/posizione finestra.
+- [x] Auto-refresh configurabile: Manuale / 5 / 15 / 30 / 60 minuti.
+- [x] Indicatore di freschezza per sorgente.
+- [x] Persistenza della sorgente attiva.
+- [x] Persistenza della timezone scelta.
+- [x] Persistenza della data selezionata.
+- [x] Persistenza di ordinamento colonna e direzione.
+- [x] Persistenza di dimensione/posizione finestra.
 
 Criterio di completamento: alla riapertura l'app deve ripristinare lo stato operativo precedente e aggiornarsi senza intervento manuale quando richiesto.
 
@@ -56,7 +56,7 @@ Criterio di completamento: il calendario deve poter diventare uno strumento oper
 - [x] Test cache corrotta.
 - [ ] Test una sorgente disponibile e una indisponibile.
 - [x] Test shutdown durante richieste attive.
-- [ ] Test persistenza completa della UI.
+- [x] Test persistenza completa della UI.
 
 ## Principi da mantenere
 
