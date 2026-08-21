@@ -2,6 +2,8 @@
 
 Applicazione desktop Python per i calendari economici **ForexFactory/Faireconomy** e **FXStreet**, con interfaccia HTML/CSS/JavaScript ospitata in Qt WebEngine.
 
+**Release stabile: 1.0.0**
+
 La UI usa superfici `#141414` e `#FF6600` come unico colore accent.
 
 ## Requisiti
@@ -47,7 +49,7 @@ ui/           Finestra Qt, bridge QWebChannel e frontend HTML/CSS/JS
 install.sh    Installazione locale nella .venv
 main.py       Entry point
 requirements.txt
-ROADMAP.md    Roadmap di sviluppo completata
+CHANGELOG.md  Cronologia delle release pubbliche
 ```
 
 Le cartelle applicative principali sono quindi `core`, `config`, `assets`, `tests` e `ui`.
@@ -106,9 +108,9 @@ Non viene avviato alcun server HTTP locale e non è richiesto alcun browser este
 - chiusura diretta con la X della finestra
 - UI contenuta nella finestra con scroll interno della tabella
 
-## Roadmap
+## Release
 
-La roadmap in `ROADMAP.md` è **completata**: milestone 1.2–1.5 e hardening pianificato risultano implementati e coperti da test automatici.
+La cronologia delle release pubbliche è mantenuta in `CHANGELOG.md`. La release `v1.0.0` rappresenta la prima versione pubblica stabile del progetto.
 
 ## Sviluppo e test
 
