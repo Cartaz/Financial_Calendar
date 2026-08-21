@@ -66,7 +66,7 @@ ui.window / Qt WebEngine
 HTML + CSS + JavaScript
 ```
 
-Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, filtri, timer di aggiornamento e lavoro in background; il frontend gestisce esclusivamente la presentazione.
+Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, filtri, timer di aggiornamento e lavoro in background; il frontend gestisce presentazione e navigazione locale del dataset già ricevuto.
 
 ## Funzioni principali
 
@@ -79,6 +79,12 @@ Non viene avviato alcun server HTTP locale e non è richiesto alcun browser este
 - mantenimento degli ultimi dati reali se un refresh fallisce
 - timestamp di refresh interni in ISO-8601 UTC
 - filtri indipendenti per data, area e impatto
+- ricerca testuale locale su evento, paese, impatto e valori economici
+- filtri rapidi Tutti / Oggi / Domani / Prossime 24h
+- filtro Prossime 24h basato sui timestamp UTC reali, anche attraverso mezzanotte e cambi DST
+- countdown locale per gli eventi futuri
+- indicazione del prossimo evento HIGH e sua evidenziazione discreta
+- attenuazione degli eventi già trascorsi
 - conversione timezone DST-safe tramite zone IANA, con offset UTC fissi ancora disponibili
 - stato sorgente distinto tra dati aggiornati, dati salvati, dati non recenti e assenza di dati
 - ripristino della sorgente attiva, data, timezone e intervallo auto-refresh
@@ -92,7 +98,7 @@ Non viene avviato alcun server HTTP locale e non è richiesto alcun browser este
 
 ## Roadmap
 
-Lo sviluppo pianificato è tracciato in `ROADMAP.md`, con checklist per affidabilità, aggiornamento automatico, persistenza UX, ricerca, notifiche ed export.
+Lo sviluppo pianificato è tracciato in `ROADMAP.md`, con checklist per affidabilità, aggiornamento automatico, persistenza UX, navigazione, notifiche ed export.
 
 ## Sviluppo e test
 
@@ -103,6 +109,7 @@ Le dipendenze di sviluppo non sono mantenute in file di configurazione aggiuntiv
 .venv/bin/python -m compileall -q main.py config core ui tests
 .venv/bin/ruff check --target-version py312 --select E4,E7,E9,F main.py config core ui tests
 node --check ui/app.js
+node --check ui/navigation.js
 QT_QPA_PLATFORM=offscreen \
 QTWEBENGINE_DISABLE_SANDBOX=1 \
 QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --no-sandbox" \
