@@ -49,14 +49,20 @@ Criterio di completamento: il calendario deve poter diventare uno strumento oper
 
 ## Hardening continuo
 
-- [ ] Fixture reali anonimizzate per entrambe le API.
-- [ ] Soglia di warning quando cresce la percentuale di eventi scartati dal parser.
-- [ ] Metriche di refresh nel log: durata, raw, validi, scartati, origine cache/rete.
+- [x] Fixture reali anonimizzate per entrambe le API.
+- [x] Soglia di warning quando cresce la percentuale di eventi scartati dal parser.
+- [x] Metriche di refresh nel log: durata, raw, validi, scartati, origine cache/rete.
 - [x] Test avvio offline.
 - [x] Test cache corrotta.
-- [ ] Test una sorgente disponibile e una indisponibile.
+- [x] Test una sorgente disponibile e una indisponibile.
 - [x] Test shutdown durante richieste attive.
 - [x] Test persistenza completa della UI.
+
+Criterio di completamento: i contratti dei feed devono essere coperti da fixture realistiche, le degradazioni dei parser devono emergere nei log e il fallimento di una sorgente non deve compromettere i dati validi dell'altra.
+
+## Stato
+
+**Roadmap completata.** Tutte le milestone e le attività di hardening pianificate in questo documento sono implementate e coperte da test automatici.
 
 ## Principi da mantenere
 
