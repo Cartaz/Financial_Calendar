@@ -9,7 +9,7 @@ from pathlib import Path
 class AppMeta:
     NAME = "financial_calendar"
     DISPLAY_NAME = "Calendario Finanziario"
-    VERSION = "1.1.0"
+    VERSION = "1.2.0"
     AUTHOR = "Cartaz"
     DESCRIPTION = "Calendari economici ForexFactory/Faireconomy e FXStreet"
     ICON_NAME = "financial-calendar"
