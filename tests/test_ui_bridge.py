@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QApplication
 
 from config.constants import PathConfig
 from config.settings import Settings
@@ -89,7 +89,7 @@ def test_column_order_is_validated_and_persisted(monkeypatch, tmp_path) -> None:
 
 def test_ui_state_sort_and_auto_refresh_are_persisted(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
-    qt_app = QCoreApplication.instance() or QCoreApplication([])
+    qt_app = QApplication.instance() or QApplication([])
     assert qt_app is not None
 
     settings = Settings()
