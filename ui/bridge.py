@@ -87,6 +87,7 @@ class CalendarBridge(QObject):
             source = _SOURCE_BY_KEY.get(source_key)
             if source is not None:
                 data["last_refresh"] = self._controller.get_last_refresh(source)
+                data["data_origin"] = self._controller.get_data_origin(source)
         self.backendEvent.emit(event_name, data)
 
     def enqueue_log(self, payload: dict[str, str]) -> None:
@@ -147,6 +148,7 @@ class CalendarBridge(QObject):
             "selected_impact": self._settings.get(f"{prefix}_selected_impact"),
             "last_refresh": self._controller.get_last_refresh(source),
             "refreshing": self._controller.is_refreshing(source),
+            "data_origin": self._controller.get_data_origin(source),
         }
 
     @Slot(result="QVariantMap")
