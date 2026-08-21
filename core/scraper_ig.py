@@ -16,6 +16,7 @@ from core.exceptions import ScraperConnectionError, ScraperParseError
 from core.http_client import build_retry_session
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_ig_parser import parse_ig_date
+from core.scraper_metrics import RefreshTimer, ScrapeMetrics, response_retry_count
 from core.scraper_utils import clean_string, save_debug_json
 
 logger = logging.getLogger(__name__)
@@ -51,12 +52,15 @@ _COUNTRY_MAP: dict[str, str] = {
 
 def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
     events: list[CalendarEvent] = []
-    skipped = 0
 
     for raw_index, item in enumerate(data):
         try:
             impact_raw = item.get("impact", "Low")
-            impact_text = impact_raw if isinstance(impact_raw, str) else str(impact_raw or "Low")
+            impact_text = (
+                impact_raw
+                if isinstance(impact_raw, str)
+                else str(impact_raw or "Low")
+            )
             impact = _IMPACT_MAP.get(impact_text, ImpactLevel.LOW)
 
             date_text = clean_string(item.get("date", ""))
@@ -65,7 +69,9 @@ def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
             country_code = clean_string(item.get("country", ""))
             region = _COUNTRY_MAP.get(country_code, country_code)
 
-            title = clean_string(item.get("title", "")) or clean_string(item.get("name", ""))
+            title = clean_string(item.get("title", "")) or clean_string(
+                item.get("name", "")
+            )
             if not title:
                 raise ScraperParseError("titolo evento mancante")
 
@@ -85,15 +91,13 @@ def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
             )
         except Exception as exc:
             logger.warning("ForexFactory: evento raw %d ignorato: %s", raw_index, exc)
-            skipped += 1
 
-    if skipped:
-        logger.info("ForexFactory: %d eventi scartati", skipped)
     return events
 
 
 def scrape_ig_calendar(debug: bool = False) -> list[CalendarEvent]:
     """Fetch and validate the ForexFactory/Faireconomy weekly calendar."""
+    timer = RefreshTimer()
     try:
         response = _SESSION.get(
             _API_URL,
@@ -102,14 +106,31 @@ def scrape_ig_calendar(debug: bool = False) -> list[CalendarEvent]:
         )
         response.raise_for_status()
     except requests.RequestException as exc:
+        ScrapeMetrics(
+            source="ForexFactory",
+            raw_count=0,
+            valid_count=0,
+            skipped_count=0,
+            duration_ms=timer.elapsed_ms(),
+            retries=response_retry_count(getattr(exc, "response", None)),
+        ).log(logger)
         raise ScraperConnectionError(
             "Impossibile raggiungere il feed ForexFactory/Faireconomy",
             details=str(exc),
         ) from exc
 
+    retries = response_retry_count(response)
     try:
         data = response.json()
     except ValueError as exc:
+        ScrapeMetrics(
+            source="ForexFactory",
+            raw_count=0,
+            valid_count=0,
+            skipped_count=0,
+            duration_ms=timer.elapsed_ms(),
+            retries=retries,
+        ).log(logger)
         raise ScraperParseError(
             "Risposta ForexFactory non JSON",
             details=str(exc),
@@ -127,11 +148,20 @@ def scrape_ig_calendar(debug: bool = False) -> list[CalendarEvent]:
         raise ScraperParseError("Il feed ForexFactory ha restituito zero eventi raw")
 
     events = _parse_ff_events(data)
+    metrics = ScrapeMetrics(
+        source="ForexFactory",
+        raw_count=len(data),
+        valid_count=len(events),
+        skipped_count=len(data) - len(events),
+        duration_ms=timer.elapsed_ms(),
+        retries=retries,
+    )
+    metrics.log(logger)
+
     if not events:
         raise ScraperParseError(
             "Nessun evento ForexFactory valido dopo il parsing",
             details=f"raw={len(data)}",
         )
 
-    logger.info("ForexFactory: %d eventi validi da %d raw", len(events), len(data))
     return events
