@@ -75,8 +75,10 @@ Non viene avviato alcun server HTTP locale e non è richiesto alcun browser este
 - cache persistente dell'ultimo calendario valido per sorgente
 - avvio con dati salvati prima del refresh di rete
 - mantenimento degli ultimi dati reali se un refresh fallisce
+- timestamp di refresh interni in ISO-8601 UTC
 - filtri indipendenti per data, area e impatto
-- conversione del fuso orario
+- conversione timezone DST-safe tramite zone IANA, con offset UTC fissi ancora disponibili
+- stato sorgente distinto tra dati aggiornati, dati salvati e assenza di dati
 - ordinamento e riordino persistente delle colonne
 - bandiere dei paesi
 - errori leggibili mantenendo visibili gli ultimi dati reali
