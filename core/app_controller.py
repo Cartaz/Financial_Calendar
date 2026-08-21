@@ -10,6 +10,7 @@ from typing import Callable
 
 from config.constants import CalendarDefaults
 from config.settings import Settings
+from core.cache import CalendarCache
 from core.event_bus import EventBus
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_fxstreet import scrape_fxstreet_calendar
@@ -42,6 +43,25 @@ class AppController:
         self._data_lock = threading.RLock()
         self._shutting_down = threading.Event()
         self._shutdown_complete = False
+
+        self._cache = CalendarCache()
+        self._data_origin: dict[str, str] = {"ig": "empty", "fxstreet": "empty"}
+        self._data_timestamp: dict[str, str] = {"ig": "", "fxstreet": ""}
+        self._load_cached_events()
+
+    def _load_cached_events(self) -> None:
+        for source in (CalendarSource.FOREXFACTORY, CalendarSource.FXSTREET):
+            snapshot = self._cache.load(source)
+            if snapshot is None:
+                continue
+
+            with self._data_lock:
+                if source == CalendarSource.FXSTREET:
+                    self.events_fxstreet = list(snapshot.events)
+                else:
+                    self.events_ig = list(snapshot.events)
+                self._data_origin[source.value] = "cache"
+                self._data_timestamp[source.value] = snapshot.refreshed_at
 
     def set_notification_callback(
         self,
@@ -153,9 +173,15 @@ class AppController:
             logger.error("%s: errore refresh: %s", source_key, exc)
             self._notify(
                 "calendar_refresh_error",
-                {"source": source_key, "error": str(exc)},
+                {
+                    "source": source_key,
+                    "error": str(exc),
+                    "data_origin": self.get_data_origin(source),
+                },
             )
             return
+
+        refreshed_at = datetime.now(timezone.utc).isoformat()
 
         with self._data_lock:
             if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY):
@@ -164,15 +190,24 @@ class AppController:
             else:
                 self.events_fxstreet = list(events)
                 refresh_key = "last_refresh_fxstreet"
+            self._data_origin[source_key] = "network"
+            self._data_timestamp[source_key] = refreshed_at
 
-        ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        if not self.settings.set(refresh_key, ts):
+        if not self._cache.save(source, list(events), refreshed_at):
+            logger.warning("%s: impossibile aggiornare la cache persistente", source_key)
+
+        if not self.settings.set(refresh_key, refreshed_at):
             logger.warning("%s: impossibile persistere last refresh", source_key)
 
         logger.info("%s: refresh completato, %d eventi", source_key, len(events))
         self._notify(
             "calendar_refreshed",
-            {"source": source_key, "count": len(events), "timestamp": ts},
+            {
+                "source": source_key,
+                "count": len(events),
+                "timestamp": refreshed_at,
+                "data_origin": "network",
+            },
         )
 
     def filter_events(
@@ -270,12 +305,22 @@ class AppController:
         return converted
 
     def get_last_refresh(self, source: CalendarSource) -> str:
+        source_key = source.value
+        with self._data_lock:
+            timestamp = self._data_timestamp.get(source_key, "")
+        if timestamp:
+            return timestamp
+
         key = (
             "last_refresh_ig"
             if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY)
             else "last_refresh_fxstreet"
         )
         return str(self.settings.get(key))
+
+    def get_data_origin(self, source: CalendarSource) -> str:
+        with self._data_lock:
+            return self._data_origin.get(source.value, "empty")
 
     def begin_shutdown(self) -> None:
         """Stop accepting work and prevent callbacks into a closing UI."""
