@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QByteArray, Qt, QUrl
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineScript, QWebEngineSettings
@@ -16,6 +17,8 @@ from config.constants import AppMeta, PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from ui.bridge import CalendarBridge
+
+logger = logging.getLogger(__name__)
 
 
 class CalendarWindow(QMainWindow):
@@ -29,9 +32,11 @@ class CalendarWindow(QMainWindow):
         debug: bool = False,
     ) -> None:
         super().__init__()
+        self._settings = settings
         self.setWindowTitle(AppMeta.DISPLAY_NAME)
         self.resize(1360, 820)
         self.setMinimumSize(820, 560)
+        self._restore_window_geometry()
 
         icon_path = PathConfig.ASSETS_DIR / "icons" / "financial-calendar.png"
         if icon_path.exists():
@@ -75,6 +80,23 @@ class CalendarWindow(QMainWindow):
         if app is not None:
             self._add_shortcut("Ctrl+Q", app.quit)
 
+    def _restore_window_geometry(self) -> None:
+        encoded = str(self._settings.get("window_geometry") or "")
+        if not encoded:
+            return
+        try:
+            payload = QByteArray.fromBase64(encoded.encode("ascii"))
+        except (UnicodeEncodeError, ValueError):
+            logger.warning("Geometria finestra salvata non valida")
+            return
+        if payload.isEmpty() or not self.restoreGeometry(payload):
+            logger.warning("Impossibile ripristinare la geometria finestra salvata")
+
+    def _save_window_geometry(self) -> None:
+        encoded = bytes(self.saveGeometry().toBase64()).decode("ascii")
+        if not self._settings.set("window_geometry", encoded):
+            logger.warning("Impossibile salvare la geometria finestra")
+
     def _install_viewport_styles(self, css: str) -> None:
         """Inject viewport constraints at document-ready."""
         source = f"""
@@ -100,6 +122,7 @@ class CalendarWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Treat the window close button as an explicit application exit."""
+        self._save_window_geometry()
         event.accept()
         app = QApplication.instance()
         if app is not None:

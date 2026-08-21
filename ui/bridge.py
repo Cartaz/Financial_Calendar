@@ -6,12 +6,15 @@ import json
 import logging
 from collections import deque
 from datetime import datetime
-from PySide6.QtCore import QObject, Signal, Slot
+
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from config.constants import AppMeta, CalendarDefaults
 from config.settings import Settings
 from core.app_controller import AppController
 from core.models import CalendarEvent, CalendarSource
+
+logger = logging.getLogger(__name__)
 
 _SOURCE_BY_KEY: dict[str, CalendarSource] = {
     "ig": CalendarSource.FOREXFACTORY,
@@ -83,6 +86,10 @@ class CalendarBridge(QObject):
         self._debug = debug
         self._started = False
         self._logs: deque[dict[str, str]] = deque(maxlen=250)
+
+        self._auto_refresh_timer = QTimer(self)
+        self._auto_refresh_timer.setSingleShot(False)
+        self._auto_refresh_timer.timeout.connect(self._controller.refresh_all)
 
         self._controller_event.connect(self._forward_controller_event)
         self._log_event.connect(self._forward_log_event)
@@ -162,6 +169,8 @@ class CalendarBridge(QObject):
             "column_order": self._settings.get(f"{prefix}_column_order"),
             "selected_region": self._settings.get(f"{prefix}_selected_region"),
             "selected_impact": self._settings.get(f"{prefix}_selected_impact"),
+            "sort_key": self._settings.get(f"{prefix}_sort_key"),
+            "sort_direction": self._settings.get(f"{prefix}_sort_direction"),
             "last_refresh": _display_refresh_timestamp(timestamp),
             "last_refresh_iso": timestamp,
             "refreshing": self._controller.is_refreshing(source),
@@ -179,6 +188,13 @@ class CalendarBridge(QObject):
             "sources": [self._source_state("ig"), self._source_state("fxstreet")],
             "regions": list(CalendarDefaults.REGIONS),
             "impacts": ["ALL", *CalendarDefaults.IMPACT_LEVELS],
+            "auto_refresh_options": [0, 5, 15, 30, 60],
+            "ui_state": {
+                "active_source": self._settings.get("active_source"),
+                "timezone_name": self._settings.get("timezone_name"),
+                "selected_date": self._settings.get("selected_date"),
+                "auto_refresh_minutes": self._settings.get("auto_refresh_minutes"),
+            },
             "flag_codes": dict(CalendarDefaults.FLAG_CODES),
             "debug": self._debug,
         }
@@ -227,9 +243,17 @@ class CalendarBridge(QObject):
     def saveFilters(self, source_key: str, region: str, impact: str) -> bool:
         self._source(source_key)
         prefix = "ig" if source_key == "ig" else "fxstreet"
-        region_ok = self._settings.set(f"{prefix}_selected_region", region)
-        impact_ok = self._settings.set(f"{prefix}_selected_impact", impact)
-        return bool(region_ok and impact_ok)
+        try:
+            return bool(
+                self._settings.set_many(
+                    {
+                        f"{prefix}_selected_region": region,
+                        f"{prefix}_selected_impact": impact,
+                    }
+                )
+            )
+        except (TypeError, ValueError):
+            return False
 
     @Slot(str, str, result=bool)
     def saveColumnOrder(self, source_key: str, order_json: str) -> bool:
@@ -243,6 +267,52 @@ class CalendarBridge(QObject):
             return bool(self._settings.set(f"{prefix}_column_order", order))
         except (TypeError, ValueError):
             return False
+
+    @Slot(str, str, str, result=bool)
+    def saveSort(self, source_key: str, sort_key: str, direction: str) -> bool:
+        self._source(source_key)
+        prefix = "ig" if source_key == "ig" else "fxstreet"
+        try:
+            return bool(
+                self._settings.set_many(
+                    {
+                        f"{prefix}_sort_key": sort_key,
+                        f"{prefix}_sort_direction": direction,
+                    }
+                )
+            )
+        except (TypeError, ValueError):
+            return False
+
+    @Slot(str, str, str, int, result=bool)
+    def saveUiState(
+        self,
+        active_source: str,
+        timezone_name: str,
+        selected_date: str,
+        auto_refresh_minutes: int,
+    ) -> bool:
+        try:
+            saved = self._settings.set_many(
+                {
+                    "active_source": active_source,
+                    "timezone_name": timezone_name,
+                    "selected_date": selected_date,
+                    "auto_refresh_minutes": auto_refresh_minutes,
+                }
+            )
+        except (TypeError, ValueError):
+            return False
+        if saved:
+            self._configure_auto_refresh(self._settings.get("auto_refresh_minutes"))
+        return bool(saved)
+
+    def _configure_auto_refresh(self, minutes: int) -> None:
+        self._auto_refresh_timer.stop()
+        if not self._started or minutes <= 0:
+            return
+        self._auto_refresh_timer.start(int(minutes) * 60 * 1000)
+        logger.info("Auto-refresh configurato ogni %d minuti", minutes)
 
     @Slot(str)
     def refreshSource(self, source_key: str) -> None:
@@ -262,6 +332,7 @@ class CalendarBridge(QObject):
         if self._started:
             return
         self._started = True
+        self._configure_auto_refresh(self._settings.get("auto_refresh_minutes"))
         self._controller.refresh_all()
 
     @Slot(result="QVariantList")

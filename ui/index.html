@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="dark">
   <title>Calendario Finanziario</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="ux.css">
 </head>
 <body>
   <div class="app-shell" id="app" aria-busy="true">
@@ -46,6 +47,7 @@
           <span>
             <strong>ForexFactory</strong>
             <small>Faireconomy feed</small>
+            <small class="source-freshness">In attesa dati</small>
           </span>
         </button>
         <button class="source-tab" type="button" data-source="fxstreet" aria-pressed="false">
@@ -53,6 +55,7 @@
           <span>
             <strong>FXStreet</strong>
             <small>Economic calendar</small>
+            <small class="source-freshness">In attesa dati</small>
           </span>
         </button>
       </nav>
@@ -84,6 +87,13 @@
           <label for="filter-timezone">Fuso orario</label>
           <div class="field-shell neo-inset-small select-shell">
             <select id="filter-timezone"></select>
+          </div>
+        </div>
+
+        <div class="field-group auto-refresh-field">
+          <label for="auto-refresh">Auto-refresh</label>
+          <div class="field-shell neo-inset-small select-shell">
+            <select id="auto-refresh"></select>
           </div>
         </div>
 
@@ -156,6 +166,8 @@
         <span id="event-count">0 eventi</span>
         <span class="footer-separator" aria-hidden="true"></span>
         <span>Ultimo aggiornamento: <strong id="last-refresh">mai</strong></span>
+        <span class="footer-separator" aria-hidden="true"></span>
+        <span>Freschezza: <strong id="freshness-label">nessun dato</strong></span>
         <span class="footer-spacer"></span>
         <span class="drag-hint">Trascina le intestazioni per riordinarle</span>
       </footer>

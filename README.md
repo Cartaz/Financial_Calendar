@@ -66,20 +66,24 @@ ui.window / Qt WebEngine
 HTML + CSS + JavaScript
 ```
 
-Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, filtri e lavoro in background; il frontend gestisce esclusivamente la presentazione.
+Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, filtri, timer di aggiornamento e lavoro in background; il frontend gestisce esclusivamente la presentazione.
 
 ## Funzioni principali
 
 - calendari ForexFactory/Faireconomy e FXStreet
 - refresh asincrono
+- auto-refresh configurabile: Manuale / 5 / 15 / 30 / 60 minuti
+- indicatore di freschezza indipendente per ciascuna sorgente
 - cache persistente dell'ultimo calendario valido per sorgente
 - avvio con dati salvati prima del refresh di rete
 - mantenimento degli ultimi dati reali se un refresh fallisce
 - timestamp di refresh interni in ISO-8601 UTC
 - filtri indipendenti per data, area e impatto
 - conversione timezone DST-safe tramite zone IANA, con offset UTC fissi ancora disponibili
-- stato sorgente distinto tra dati aggiornati, dati salvati e assenza di dati
-- ordinamento e riordino persistente delle colonne
+- stato sorgente distinto tra dati aggiornati, dati salvati, dati non recenti e assenza di dati
+- ripristino della sorgente attiva, data, timezone e intervallo auto-refresh
+- ordinamento e riordino persistente delle colonne, separato per sorgente
+- ripristino di dimensione e posizione della finestra
 - bandiere dei paesi
 - errori leggibili mantenendo visibili gli ultimi dati reali
 - log applicativo integrato
@@ -88,7 +92,7 @@ Non viene avviato alcun server HTTP locale e non è richiesto alcun browser este
 
 ## Roadmap
 
-Lo sviluppo pianificato è tracciato in `ROADMAP.md`, con checklist per affidabilità, auto-refresh, persistenza UX, ricerca, notifiche ed export.
+Lo sviluppo pianificato è tracciato in `ROADMAP.md`, con checklist per affidabilità, aggiornamento automatico, persistenza UX, ricerca, notifiche ed export.
 
 ## Sviluppo e test
 

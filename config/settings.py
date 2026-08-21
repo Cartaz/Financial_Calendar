@@ -8,12 +8,38 @@ import os
 import tempfile
 import threading
 from dataclasses import asdict, dataclass, field, fields
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from config.constants import CalendarDefaults, PathConfig
 
 logger = logging.getLogger(__name__)
+
+_AUTO_REFRESH_MINUTES = {0, 5, 15, 30, 60}
+_IG_SORT_KEYS = {
+    "",
+    "date",
+    "time",
+    "country",
+    "impact",
+    "event_name",
+    "actual",
+    "forecast",
+    "previous",
+}
+_FXSTREET_SORT_KEYS = {
+    "",
+    "date",
+    "time",
+    "country",
+    "event_name",
+    "impact",
+    "actual",
+    "deviation",
+    "forecast",
+    "previous",
+}
 
 
 @dataclass(slots=True)
@@ -33,6 +59,16 @@ class UserSettings:
     last_refresh_ig: str = ""
     last_refresh_fxstreet: str = ""
 
+    active_source: str = "ig"
+    timezone_name: str = "local"
+    selected_date: str = ""
+    auto_refresh_minutes: int = 15
+    ig_sort_key: str = ""
+    ig_sort_direction: str = "asc"
+    fxstreet_sort_key: str = ""
+    fxstreet_sort_direction: str = "asc"
+    window_geometry: str = ""
+
 
 _SETTINGS_FIELDS = {item.name for item in fields(UserSettings)}
 
@@ -45,6 +81,26 @@ def _valid_column_order(value: object, count: int) -> list[int]:
     if sorted(value) != list(range(count)):
         raise ValueError("column order must be a complete permutation")
     return list(value)
+
+
+def _normalize_timezone(value: object) -> str:
+    text = str(value).strip()
+    if not text:
+        return "local"
+    if len(text) > 128 or any(ord(char) < 32 for char in text):
+        raise ValueError("invalid timezone value")
+    return text
+
+
+def _normalize_selected_date(value: object) -> str:
+    text = str(value).strip()
+    if not text:
+        return ""
+    try:
+        parsed = date.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError("selected date must be YYYY-MM-DD") from exc
+    return parsed.isoformat()
 
 
 def _normalize_setting(key: str, value: Any) -> Any:
@@ -65,6 +121,45 @@ def _normalize_setting(key: str, value: Any) -> Any:
 
     if key in {"last_refresh_ig", "last_refresh_fxstreet"}:
         return str(value)
+
+    if key == "active_source":
+        text = str(value)
+        return text if text in {"ig", "fxstreet"} else "ig"
+
+    if key == "timezone_name":
+        return _normalize_timezone(value)
+
+    if key == "selected_date":
+        return _normalize_selected_date(value)
+
+    if key == "auto_refresh_minutes":
+        if isinstance(value, bool):
+            raise ValueError("auto refresh must be an integer")
+        try:
+            minutes = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("auto refresh must be an integer") from exc
+        if minutes not in _AUTO_REFRESH_MINUTES:
+            raise ValueError("unsupported auto refresh interval")
+        return minutes
+
+    if key == "ig_sort_key":
+        text = str(value)
+        return text if text in _IG_SORT_KEYS else ""
+
+    if key == "fxstreet_sort_key":
+        text = str(value)
+        return text if text in _FXSTREET_SORT_KEYS else ""
+
+    if key in {"ig_sort_direction", "fxstreet_sort_direction"}:
+        text = str(value)
+        return text if text in {"asc", "desc"} else "asc"
+
+    if key == "window_geometry":
+        text = str(value)
+        if len(text) > 16384:
+            raise ValueError("window geometry payload too large")
+        return text
 
     raise AttributeError(f"Impostazione sconosciuta: {key}")
 
@@ -165,21 +260,36 @@ class Settings:
             return list(value) if isinstance(value, list) else value
 
     def set(self, key: str, value: Any) -> bool:
-        if key not in _SETTINGS_FIELDS:
-            raise AttributeError(f"Impostazione sconosciuta: {key}")
+        return self.set_many({key: value})
 
-        normalized = _normalize_setting(key, value)
+    def set_many(self, values: dict[str, Any]) -> bool:
+        """Validate and persist several settings in one atomic file replacement."""
+        if not values:
+            return True
+        unknown = set(values) - _SETTINGS_FIELDS
+        if unknown:
+            raise AttributeError(f"Impostazione sconosciuta: {sorted(unknown)[0]}")
+
+        normalized = {key: _normalize_setting(key, value) for key, value in values.items()}
+        changed: dict[str, tuple[Any, Any]] = {}
         with self._lock:
-            previous = getattr(self._data, key)
-            if previous == normalized:
+            for key, value in normalized.items():
+                previous = getattr(self._data, key)
+                if previous != value:
+                    changed[key] = (previous, value)
+                    setattr(self._data, key, value)
+
+            if not changed:
                 return True
-            setattr(self._data, key, normalized)
+
             saved = self._save_locked()
             if not saved:
-                setattr(self._data, key, previous)
+                for key, (previous, _) in changed.items():
+                    setattr(self._data, key, previous)
 
         if saved:
-            self._emit_config_changed(key, normalized)
+            for key, (_, value) in changed.items():
+                self._emit_config_changed(key, value)
         return saved
 
     def _emit_config_changed(self, key: str, value: Any) -> None:

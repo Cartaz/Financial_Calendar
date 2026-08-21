@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from PySide6.QtWidgets import QApplication
+
 from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
@@ -48,6 +50,7 @@ def test_initial_state_exposes_real_sources_and_persisted_filters(monkeypatch, t
         assert len(sources["fxstreet"]["columns"]) == 9
         assert initial["regions"][-1] == "ALL"
         assert initial["impacts"] == ["ALL", "HIGH", "MID", "LOW"]
+        assert initial["auto_refresh_options"] == [0, 5, 15, 30, 60]
     finally:
         controller.shutdown()
 
@@ -80,5 +83,41 @@ def test_column_order_is_validated_and_persisted(monkeypatch, tmp_path) -> None:
         assert settings.get("ig_column_order") == order
         assert bridge.saveColumnOrder("ig", "[0, 1]") is False
         assert settings.get("ig_column_order") == order
+    finally:
+        controller.shutdown()
+
+
+def test_ui_state_sort_and_auto_refresh_are_persisted(monkeypatch, tmp_path) -> None:
+    _redirect_paths(monkeypatch, tmp_path)
+    qt_app = QApplication.instance() or QApplication([])
+    assert qt_app is not None
+
+    settings = Settings()
+    controller = AppController(settings)
+    refresh_calls: list[bool] = []
+    controller.refresh_all = lambda: refresh_calls.append(True)
+    bridge = CalendarBridge(controller, settings)
+    try:
+        assert bridge.saveUiState("fxstreet", "Europe/Rome", "2026-08-24", 5)
+        assert bridge.saveSort("fxstreet", "impact", "desc")
+
+        initial = bridge.getInitialState()
+        sources = {source["key"]: source for source in initial["sources"]}
+        assert initial["ui_state"] == {
+            "active_source": "fxstreet",
+            "timezone_name": "Europe/Rome",
+            "selected_date": "2026-08-24",
+            "auto_refresh_minutes": 5,
+        }
+        assert sources["fxstreet"]["sort_key"] == "impact"
+        assert sources["fxstreet"]["sort_direction"] == "desc"
+
+        bridge.start()
+        assert refresh_calls == [True]
+        assert bridge._auto_refresh_timer.isActive()
+        assert bridge._auto_refresh_timer.interval() == 5 * 60 * 1000
+
+        assert bridge.saveUiState("fxstreet", "Europe/Rome", "2026-08-24", 0)
+        assert not bridge._auto_refresh_timer.isActive()
     finally:
         controller.shutdown()
