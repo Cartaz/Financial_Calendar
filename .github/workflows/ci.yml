@@ -17,6 +17,8 @@ jobs:
         python-version: ["3.12", "3.14"]
     env:
       QT_QPA_PLATFORM: offscreen
+      QTWEBENGINE_DISABLE_SANDBOX: "1"
+      QTWEBENGINE_CHROMIUM_FLAGS: "--disable-gpu --no-sandbox"
 
     steps:
       - uses: actions/checkout@v4
@@ -32,20 +34,10 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Python compile check
-        run: python -m compileall -q main.py config core ui_qml tests
+        run: python -m compileall -q main.py config core web_ui tests
 
       - name: Ruff
-        run: ruff check main.py config core ui_qml tests
-
-      - name: QML component lint
-        run: |
-          pyside6-qmllint -I qml \
-            qml/RaisedSurface.qml \
-            qml/InsetSurface.qml \
-            qml/NeoButton.qml \
-            qml/NeoCheckBox.qml \
-            qml/NeoScrollBar.qml \
-            qml/NeoTabButton.qml
+        run: ruff check main.py config core web_ui tests
 
       - name: Test suite
         run: pytest -q
