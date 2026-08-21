@@ -14,6 +14,8 @@ from config.settings import Settings
 from core.app_controller import AppController
 from core.models import CalendarEvent, CalendarSource
 
+logger = logging.getLogger(__name__)
+
 _SOURCE_BY_KEY: dict[str, CalendarSource] = {
     "ig": CalendarSource.FOREXFACTORY,
     "fxstreet": CalendarSource.FXSTREET,
