@@ -85,7 +85,7 @@ Le dipendenze di sviluppo non sono mantenute in file di configurazione aggiuntiv
 ```bash
 .venv/bin/python -m pip install "pytest>=8.3,<9" "ruff>=0.12,<1"
 .venv/bin/python -m compileall -q main.py config core ui tests
-.venv/bin/ruff check main.py config core ui tests
+.venv/bin/ruff check --target-version py312 --select E4,E7,E9,F main.py config core ui tests
 node --check ui/app.js
 QT_QPA_PLATFORM=offscreen \
 QTWEBENGINE_DISABLE_SANDBOX=1 \
