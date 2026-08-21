@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QApplication
 from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
-from web_ui.window import CalendarWindow
+from ui.window import CalendarWindow
 
 
 def _redirect_paths(monkeypatch, tmp_path) -> None:

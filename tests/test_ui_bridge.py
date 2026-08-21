@@ -6,7 +6,7 @@ from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
-from web_ui.bridge import CalendarBridge
+from ui.bridge import CalendarBridge
 
 
 def _redirect_paths(monkeypatch, tmp_path) -> None:
