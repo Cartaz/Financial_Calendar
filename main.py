@@ -1,22 +1,18 @@
-"""Financial Calendar entry point using the Qt Quick/QML UI."""
+"""Financial Calendar desktop entry point with an HTML/CSS/JavaScript UI."""
 
 from __future__ import annotations
 
 import argparse
 import logging
 import sys
-from pathlib import Path
 
-from PySide6.QtCore import QUrl
-from PySide6.QtGui import QIcon
-from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtWidgets import QApplication
 
 from config.constants import AppMeta, PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
-from ui_qml.bridge import CalendarBridge
-from ui_qml.tray import TrayIconManager
+from web_ui.bridge import WebLogHandler
+from web_ui.window import CalendarWindow
 
 
 def _parse_args() -> argparse.Namespace:
@@ -37,58 +33,35 @@ def main() -> int:
     settings = Settings()
     settings.load()
 
-    # QApplication is retained because the tray menu uses Qt Widgets while
-    # the application window itself is rendered by Qt Quick/QML.
     app = QApplication([sys.argv[0]])
     app.setApplicationName(AppMeta.NAME)
     app.setApplicationDisplayName(AppMeta.DISPLAY_NAME)
     app.setApplicationVersion(AppMeta.VERSION)
     app.setDesktopFileName("financial_calendar")
-
-    icon_path = PathConfig.ASSETS_DIR / "icons" / "financial-calendar.png"
-    if icon_path.exists():
-        app.setWindowIcon(QIcon(str(icon_path)))
+    app.setQuitOnLastWindowClosed(True)
 
     controller = AppController(settings, debug=args.debug)
-    bridge = CalendarBridge(controller)
-
-    # Tell the controller to stop accepting work before QML objects are torn
-    # down. The final shutdown below then waits for/cancels executor work.
     app.aboutToQuit.connect(controller.begin_shutdown)
 
-    engine = QQmlApplicationEngine()
-    engine.rootContext().setContextProperty("bridge", bridge)
-    engine.rootContext().setContextProperty(
-        "trayAvailable",
-        TrayIconManager.is_available(),
-    )
-
-    qml_file = Path(__file__).resolve().parent / "qml" / "Main.qml"
-    engine.load(QUrl.fromLocalFile(str(qml_file)))
-    if not engine.rootObjects():
+    try:
+        window = CalendarWindow(controller, settings, debug=args.debug)
+    except Exception:
+        logging.getLogger(__name__).exception("Impossibile inizializzare la UI web")
         controller.shutdown()
+        settings.save()
         return 1
 
-    window = engine.rootObjects()[0]
-    tray_manager = (
-        TrayIconManager(window, bridge.refreshAll)
-        if TrayIconManager.is_available()
-        else None
-    )
+    web_log_handler = WebLogHandler(window.bridge)
+    web_log_handler.setLevel(logging.DEBUG if args.debug else logging.INFO)
+    web_log_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+    logging.getLogger().addHandler(web_log_handler)
 
-    # These local references remain alive for the whole main() stack frame,
-    # including the blocking Qt event loop. No extra keep-alive variable is
-    # required, and keeping the named locals avoids premature collection.
-    bridge.refreshAll()
-
+    window.show()
     exit_code = app.exec()
+
+    logging.getLogger().removeHandler(web_log_handler)
     controller.shutdown()
     settings.save()
-
-    # Explicitly touch the optional tray helper after the event loop so static
-    # analyzers and future refactors both preserve its lifetime through exec().
-    if tray_manager is not None:
-        del tray_manager
     return exit_code
 
 
