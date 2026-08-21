@@ -119,6 +119,25 @@ def test_windowed_layout_compacts_before_table_space_is_exhausted() -> None:
     assert ".panel-description" in css
 
 
+def test_redundant_header_copy_is_hidden_without_breaking_js_hooks() -> None:
+    html = (UI / "index.html").read_text(encoding="utf-8")
+    css = (UI / "viewport.css").read_text(encoding="utf-8")
+
+    assert 'id="app-name"' in html
+    assert 'id="app-description"' in html
+    assert 'id="connection-state"' in html
+    assert 'id="refresh-all"' in html
+    assert 'id="source-title"' in html
+    assert 'id="source-description"' in html
+    assert ".topbar h1," in css
+    assert ".topbar-actions {" not in css
+    assert ".topbar-actions" in css
+    assert "display: none !important;" in css
+    assert ".panel-heading h2," in css
+    assert ".topbar .eyebrow" in css
+    assert ".panel-heading .eyebrow" in css
+
+
 def test_system_tray_integration_is_removed() -> None:
     main = (ROOT / "main.py").read_text(encoding="utf-8")
     window = (UI / "window.py").read_text(encoding="utf-8")
