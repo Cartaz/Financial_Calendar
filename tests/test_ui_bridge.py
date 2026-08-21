@@ -33,7 +33,7 @@ def _future_event() -> CalendarEvent:
     )
 
 
-def test_initial_state_exposes_real_sources_and_persisted_filters(monkeypatch, tmp_path) -> None:
+def test_initial_state_exposes_sources_and_persisted_filters(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     controller = AppController(settings)
@@ -43,14 +43,16 @@ def test_initial_state_exposes_real_sources_and_persisted_filters(monkeypatch, t
         initial = bridge.getInitialState()
         sources = {source["key"]: source for source in initial["sources"]}
 
-        assert set(sources) == {"ig", "fxstreet"}
+        assert set(sources) == {"ig", "fxstreet", "combined"}
         assert sources["ig"]["selected_region"] == "USA"
         assert sources["ig"]["selected_impact"] == "HIGH"
         assert len(sources["ig"]["columns"]) == 8
         assert len(sources["fxstreet"]["columns"]) == 9
+        assert len(sources["combined"]["columns"]) == 10
         assert initial["regions"][-1] == "ALL"
         assert initial["impacts"] == ["ALL", "HIGH", "MID", "LOW"]
         assert initial["auto_refresh_options"] == [0, 5, 15, 30, 60]
+        assert initial["notification_lead_options"] == [0, 5, 15, 30, 60]
     finally:
         controller.shutdown()
 
@@ -87,7 +89,7 @@ def test_column_order_is_validated_and_persisted(monkeypatch, tmp_path) -> None:
         controller.shutdown()
 
 
-def test_ui_state_sort_and_auto_refresh_are_persisted(monkeypatch, tmp_path) -> None:
+def test_ui_state_sort_auto_refresh_and_notifications_are_persisted(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     qt_app = QApplication.instance() or QApplication([])
     assert qt_app is not None
@@ -100,6 +102,7 @@ def test_ui_state_sort_and_auto_refresh_are_persisted(monkeypatch, tmp_path) -> 
     try:
         assert bridge.saveUiState("fxstreet", "Europe/Rome", "2026-08-24", 5)
         assert bridge.saveSort("fxstreet", "impact", "desc")
+        assert bridge.saveNotificationLead(15)
 
         initial = bridge.getInitialState()
         sources = {source["key"]: source for source in initial["sources"]}
@@ -108,6 +111,7 @@ def test_ui_state_sort_and_auto_refresh_are_persisted(monkeypatch, tmp_path) -> 
             "timezone_name": "Europe/Rome",
             "selected_date": "2026-08-24",
             "auto_refresh_minutes": 5,
+            "high_notification_minutes": 15,
         }
         assert sources["fxstreet"]["sort_key"] == "impact"
         assert sources["fxstreet"]["sort_direction"] == "desc"
@@ -116,8 +120,11 @@ def test_ui_state_sort_and_auto_refresh_are_persisted(monkeypatch, tmp_path) -> 
         assert refresh_calls == [True]
         assert bridge._auto_refresh_timer.isActive()
         assert bridge._auto_refresh_timer.interval() == 5 * 60 * 1000
+        assert bridge._notification_timer.isActive()
 
         assert bridge.saveUiState("fxstreet", "Europe/Rome", "2026-08-24", 0)
         assert not bridge._auto_refresh_timer.isActive()
+        assert bridge.saveNotificationLead(0)
+        assert not bridge._notification_timer.isActive()
     finally:
         controller.shutdown()
