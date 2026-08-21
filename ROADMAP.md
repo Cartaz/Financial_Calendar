@@ -38,12 +38,12 @@ Criterio di completamento: trovare e contestualizzare un evento imminente deve r
 
 ## 1.5 — Funzioni operative
 
-- [ ] Notifiche desktop opzionali prima degli eventi HIGH.
-- [ ] Intervallo di anticipo notifiche configurabile.
-- [ ] Vista combinata ForexFactory + FXStreet.
-- [ ] Identificazione non distruttiva dei probabili duplicati tra sorgenti.
-- [ ] Export CSV degli eventi filtrati.
-- [ ] Export ICS degli eventi selezionati/filtrati.
+- [x] Notifiche desktop opzionali prima degli eventi HIGH.
+- [x] Intervallo di anticipo notifiche configurabile.
+- [x] Vista combinata ForexFactory + FXStreet.
+- [x] Identificazione non distruttiva dei probabili duplicati tra sorgenti.
+- [x] Export CSV degli eventi filtrati.
+- [x] Export ICS degli eventi selezionati/filtrati.
 
 Criterio di completamento: il calendario deve poter diventare uno strumento operativo senza perdere la semplicità dell'interfaccia corrente.
 
