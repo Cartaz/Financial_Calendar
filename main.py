@@ -11,7 +11,9 @@ from PySide6.QtWidgets import QApplication
 from config.constants import AppMeta, PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
-from web_ui import CalendarWindow, TrayIconManager, WebLogHandler
+from web_ui.bridge import WebLogHandler
+from web_ui.tray import TrayIconManager
+from web_ui.window import CalendarWindow
 
 
 def _parse_args() -> argparse.Namespace:
