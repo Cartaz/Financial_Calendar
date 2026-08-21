@@ -49,23 +49,3 @@ jobs:
 
       - name: Test suite
         run: pytest -q
-
-      - name: Build source archive
-        if: matrix.python-version == '3.12'
-        run: |
-          zip -qr Financial_Calendar-html-neumorphic-ui.zip . \
-            -x '.git/*' \
-            -x '.venv/*' \
-            -x '__pycache__/*' \
-            -x '*/__pycache__/*' \
-            -x '.pytest_cache/*' \
-            -x '.ruff_cache/*'
-
-      - name: Upload source archive
-        if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Financial_Calendar-html-neumorphic-ui
-          path: Financial_Calendar-html-neumorphic-ui.zip
-          if-no-files-found: error
-          retention-days: 1
