@@ -1,0 +1,42 @@
+[
+  {
+    "title": "US inflation indicator A",
+    "country": "USD",
+    "date": "2026-08-12T08:30:00-04:00",
+    "impact": "High",
+    "forecast": "0.2%",
+    "previous": "0.0%"
+  },
+  {
+    "title": "US producer-price indicator A",
+    "country": "USD",
+    "date": "2026-08-13T08:30:00-04:00",
+    "impact": "High",
+    "forecast": "0.2%",
+    "previous": "-0.3%"
+  },
+  {
+    "title": "AU policy-rate indicator",
+    "country": "AUD",
+    "date": "2026-08-11T00:30:00-04:00",
+    "impact": "High",
+    "forecast": "4.35%",
+    "previous": "4.35%"
+  },
+  {
+    "title": "JP credit indicator",
+    "country": "JPY",
+    "date": "2026-08-09T19:50:00-04:00",
+    "impact": "Low",
+    "forecast": "5.7%",
+    "previous": "5.7%"
+  },
+  {
+    "title": "UK growth indicator",
+    "country": "GBP",
+    "date": "2026-08-13T02:00:00-04:00",
+    "impact": "High",
+    "forecast": "-0.1%",
+    "previous": "0.1%"
+  }
+]

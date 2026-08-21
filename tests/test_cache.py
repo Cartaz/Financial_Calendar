@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 from config.constants import PathConfig
@@ -30,19 +31,24 @@ def _event(source: CalendarSource = CalendarSource.FOREXFACTORY) -> CalendarEven
     )
 
 
-def test_cache_round_trip_preserves_real_event_data(monkeypatch, tmp_path) -> None:
+def test_cache_round_trip_preserves_real_event_data(monkeypatch, tmp_path, caplog) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     cache = CalendarCache()
     refreshed_at = "2026-08-21T10:30:00+00:00"
 
     assert cache.save(CalendarSource.FOREXFACTORY, [_event()], refreshed_at) is True
 
-    snapshot = cache.load(CalendarSource.FOREXFACTORY)
+    with caplog.at_level(logging.INFO):
+        snapshot = cache.load(CalendarSource.FOREXFACTORY)
     assert snapshot is not None
     assert snapshot.refreshed_at == refreshed_at
     assert len(snapshot.events) == 1
     assert snapshot.events[0].event_name == "Cached test event"
     assert snapshot.events[0].source == CalendarSource.FOREXFACTORY
+    assert "origin=cache" in caplog.text
+    assert "raw=1" in caplog.text
+    assert "valid=1" in caplog.text
+    assert "skipped=0" in caplog.text
 
     payload = json.loads(
         (PathConfig.APP_DATA_DIR / "calendar_ig.json").read_text(encoding="utf-8")

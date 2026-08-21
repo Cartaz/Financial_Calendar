@@ -11,6 +11,7 @@ from config.constants import CalendarDefaults
 from core.exceptions import ScraperConnectionError, ScraperParseError
 from core.http_client import build_retry_session
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
+from core.scraper_metrics import RefreshTimer, ScrapeMetrics, response_retry_count
 from core.scraper_utils import clean_string, format_value, save_debug_json
 from core.time_utils import normalize_iso_to_utc
 
@@ -55,7 +56,6 @@ _COUNTRY_MAP: dict[str, str] = {
 
 def _parse_api_events(data: list[dict]) -> list[CalendarEvent]:
     events: list[CalendarEvent] = []
-    skipped = 0
 
     for raw_index, item in enumerate(data):
         try:
@@ -98,10 +98,7 @@ def _parse_api_events(data: list[dict]) -> list[CalendarEvent]:
             )
         except Exception as exc:
             logger.warning("FXStreet: evento raw %d ignorato: %s", raw_index, exc)
-            skipped += 1
 
-    if skipped:
-        logger.info("FXStreet: %d eventi scartati", skipped)
     return events
 
 
@@ -121,6 +118,7 @@ def _extract_event_list(payload: object) -> list[dict]:
 
 def scrape_fxstreet_calendar(debug: bool = False) -> list[CalendarEvent]:
     """Fetch and validate the next seven UTC calendar days from FXStreet."""
+    timer = RefreshTimer()
     today_utc = datetime.now(timezone.utc)
     from_date = today_utc.strftime("%Y-%m-%d")
     to_date = (today_utc + timedelta(days=7)).strftime("%Y-%m-%d")
@@ -135,14 +133,31 @@ def scrape_fxstreet_calendar(debug: bool = False) -> list[CalendarEvent]:
         )
         response.raise_for_status()
     except requests.RequestException as exc:
+        ScrapeMetrics(
+            source="FXStreet",
+            raw_count=0,
+            valid_count=0,
+            skipped_count=0,
+            duration_ms=timer.elapsed_ms(),
+            retries=response_retry_count(getattr(exc, "response", None)),
+        ).log(logger)
         raise ScraperConnectionError(
             "Impossibile raggiungere l'API FXStreet",
             details=str(exc),
         ) from exc
 
+    retries = response_retry_count(response)
     try:
         payload = response.json()
     except ValueError as exc:
+        ScrapeMetrics(
+            source="FXStreet",
+            raw_count=0,
+            valid_count=0,
+            skipped_count=0,
+            duration_ms=timer.elapsed_ms(),
+            retries=retries,
+        ).log(logger)
         raise ScraperParseError(
             "Risposta FXStreet non JSON",
             details=str(exc),
@@ -156,11 +171,20 @@ def scrape_fxstreet_calendar(debug: bool = False) -> list[CalendarEvent]:
         raise ScraperParseError("FXStreet ha restituito zero eventi raw")
 
     events = _parse_api_events(raw_events)
+    metrics = ScrapeMetrics(
+        source="FXStreet",
+        raw_count=len(raw_events),
+        valid_count=len(events),
+        skipped_count=len(raw_events) - len(events),
+        duration_ms=timer.elapsed_ms(),
+        retries=retries,
+    )
+    metrics.log(logger)
+
     if not events:
         raise ScraperParseError(
             "Nessun evento FXStreet valido dopo il parsing",
             details=f"raw={len(raw_events)}",
         )
 
-    logger.info("FXStreet: %d eventi validi da %d raw", len(events), len(raw_events))
     return events
