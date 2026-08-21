@@ -8,7 +8,7 @@ Questa roadmap raccoglie gli sviluppi pianificati dopo la stabilizzazione della 
 - [x] Avvio offline con caricamento immediato degli ultimi dati reali disponibili.
 - [x] Mantenimento dei dati precedenti quando un refresh fallisce.
 - [x] Timestamp dei nuovi refresh salvati in formato ISO-8601 UTC.
-- [x] Stato UI che distingue dati da rete, dati salvati e assenza di dati.
+- [ ] Stato UI che distingue visivamente dati da rete, dati salvati e assenza di dati.
 - [ ] Conversione timezone DST-safe basata su timezone IANA invece di un singolo offset numerico.
 - [ ] Test di regressione sui cambi ora legale/solare.
 
@@ -52,10 +52,10 @@ Criterio di completamento: il calendario deve poter diventare uno strumento oper
 - [ ] Fixture reali anonimizzate per entrambe le API.
 - [ ] Soglia di warning quando cresce la percentuale di eventi scartati dal parser.
 - [ ] Metriche di refresh nel log: durata, raw, validi, scartati, origine cache/rete.
-- [ ] Test avvio offline.
-- [ ] Test cache corrotta.
+- [x] Test avvio offline.
+- [x] Test cache corrotta.
 - [ ] Test una sorgente disponibile e una indisponibile.
-- [ ] Test shutdown durante richieste attive.
+- [x] Test shutdown durante richieste attive.
 - [ ] Test persistenza completa della UI.
 
 ## Principi da mantenere
