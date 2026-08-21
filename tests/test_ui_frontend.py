@@ -55,6 +55,31 @@ def test_frontend_uses_iana_timezone_and_exposes_cached_state() -> None:
     assert '"last_refresh_iso"' in bridge
 
 
+def test_release_13_restores_state_and_shows_freshness() -> None:
+    html = (UI / "index.html").read_text(encoding="utf-8")
+    javascript = (UI / "app.js").read_text(encoding="utf-8")
+    bridge = (UI / "bridge.py").read_text(encoding="utf-8")
+    window = (UI / "window.py").read_text(encoding="utf-8")
+    ux_css = (UI / "ux.css").read_text(encoding="utf-8")
+
+    assert 'id="auto-refresh"' in html
+    assert 'id="freshness-label"' in html
+    assert 'class="source-freshness"' in html
+    assert 'href="ux.css"' in html
+    assert '"saveUiState"' in javascript
+    assert '"saveSort"' in javascript
+    assert "sourceFreshnessSummary" in javascript
+    assert "startFreshnessClock" in javascript
+    assert "auto_refresh_options" in bridge
+    assert "QTimer" in bridge
+    assert "_auto_refresh_timer" in bridge
+    assert "saveGeometry" in window
+    assert "restoreGeometry" in window
+    assert "window_geometry" in window
+    assert ".auto-refresh-field" in ux_css
+    assert ".source-status.is-stale" in ux_css
+
+
 def test_frontend_has_accessibility_and_reduced_motion_guards() -> None:
     html = (UI / "index.html").read_text(encoding="utf-8")
     css = (UI / "styles.css").read_text(encoding="utf-8")
