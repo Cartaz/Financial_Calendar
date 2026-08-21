@@ -48,6 +48,19 @@ _COLUMN_LABELS: dict[str, list[str]] = {
 }
 
 
+def _display_refresh_timestamp(value: str) -> str:
+    """Render new ISO UTC timestamps locally while accepting legacy strings."""
+    if not value:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return value
+    return parsed.astimezone().strftime("%d/%m/%Y %H:%M:%S")
+
+
 class CalendarBridge(QObject):
     """Expose a deliberately small presentation API to JavaScript."""
 
@@ -86,7 +99,10 @@ class CalendarBridge(QObject):
             source_key = str(data.get("source", ""))
             source = _SOURCE_BY_KEY.get(source_key)
             if source is not None:
-                data["last_refresh"] = self._controller.get_last_refresh(source)
+                timestamp = self._controller.get_last_refresh(source)
+                data["last_refresh"] = _display_refresh_timestamp(timestamp)
+                data["last_refresh_iso"] = timestamp
+                data["data_origin"] = self._controller.get_data_origin(source)
         self.backendEvent.emit(event_name, data)
 
     def enqueue_log(self, payload: dict[str, str]) -> None:
@@ -125,6 +141,7 @@ class CalendarBridge(QObject):
     def _source_state(self, source_key: str) -> dict:
         source = self._source(source_key)
         prefix = "ig" if source_key == "ig" else "fxstreet"
+        timestamp = self._controller.get_last_refresh(source)
         columns = [
             {"key": key, "label": label}
             for key, label in zip(
@@ -145,8 +162,10 @@ class CalendarBridge(QObject):
             "column_order": self._settings.get(f"{prefix}_column_order"),
             "selected_region": self._settings.get(f"{prefix}_selected_region"),
             "selected_impact": self._settings.get(f"{prefix}_selected_impact"),
-            "last_refresh": self._controller.get_last_refresh(source),
+            "last_refresh": _display_refresh_timestamp(timestamp),
+            "last_refresh_iso": timestamp,
             "refreshing": self._controller.is_refreshing(source),
+            "data_origin": self._controller.get_data_origin(source),
         }
 
     @Slot(result="QVariantMap")
@@ -173,6 +192,7 @@ class CalendarBridge(QObject):
         date: str,
         tz_offset_hours: float,
     ) -> list[dict[str, str]]:
+        """Compatibility query using a fixed UTC offset."""
         source = self._source(source_key)
         events = self._controller.filter_events(
             source,
@@ -180,6 +200,26 @@ class CalendarBridge(QObject):
             impact=impact,
             date=date,
             tz_offset_hours=tz_offset_hours,
+        )
+        return [self._event_to_map(event) for event in events]
+
+    @Slot(str, str, str, str, str, result="QVariantList")
+    def getEventsInTimezone(
+        self,
+        source_key: str,
+        region: str,
+        impact: str,
+        date: str,
+        timezone_name: str,
+    ) -> list[dict[str, str]]:
+        """Query events using an IANA timezone or an explicit UTC offset spec."""
+        source = self._source(source_key)
+        events = self._controller.filter_events(
+            source,
+            region=region,
+            impact=impact,
+            date=date,
+            timezone_name=timezone_name,
         )
         return [self._event_to_map(event) for event in events]
 

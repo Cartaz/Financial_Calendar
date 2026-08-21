@@ -39,6 +39,22 @@ def test_frontend_is_semantic_and_wired_to_qwebchannel() -> None:
     assert "Vue" not in javascript
 
 
+def test_frontend_uses_iana_timezone_and_exposes_cached_state() -> None:
+    javascript = (UI / "app.js").read_text(encoding="utf-8")
+    bridge = (UI / "bridge.py").read_text(encoding="utf-8")
+
+    assert "resolvedOptions().timeZone" in javascript
+    assert '"getEventsInTimezone"' in javascript
+    assert "Europe/Rome" in javascript
+    assert "Dati salvati" in javascript
+    assert "Dati aggiornati" in javascript
+    assert "Errore · nessun dato" in javascript
+    assert "currentTimezoneOffset" not in javascript
+    assert "def getEventsInTimezone" in bridge
+    assert '"data_origin"' in bridge
+    assert '"last_refresh_iso"' in bridge
+
+
 def test_frontend_has_accessibility_and_reduced_motion_guards() -> None:
     html = (UI / "index.html").read_text(encoding="utf-8")
     css = (UI / "styles.css").read_text(encoding="utf-8")

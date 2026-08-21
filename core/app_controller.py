@@ -5,11 +5,13 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Callable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config.constants import CalendarDefaults
 from config.settings import Settings
+from core.cache import CalendarCache
 from core.event_bus import EventBus
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_fxstreet import scrape_fxstreet_calendar
@@ -42,6 +44,25 @@ class AppController:
         self._data_lock = threading.RLock()
         self._shutting_down = threading.Event()
         self._shutdown_complete = False
+
+        self._cache = CalendarCache()
+        self._data_origin: dict[str, str] = {"ig": "empty", "fxstreet": "empty"}
+        self._data_timestamp: dict[str, str] = {"ig": "", "fxstreet": ""}
+        self._load_cached_events()
+
+    def _load_cached_events(self) -> None:
+        for source in (CalendarSource.FOREXFACTORY, CalendarSource.FXSTREET):
+            snapshot = self._cache.load(source)
+            if snapshot is None:
+                continue
+
+            with self._data_lock:
+                if source == CalendarSource.FXSTREET:
+                    self.events_fxstreet = list(snapshot.events)
+                else:
+                    self.events_ig = list(snapshot.events)
+                self._data_origin[source.value] = "cache"
+                self._data_timestamp[source.value] = snapshot.refreshed_at
 
     def set_notification_callback(
         self,
@@ -153,9 +174,15 @@ class AppController:
             logger.error("%s: errore refresh: %s", source_key, exc)
             self._notify(
                 "calendar_refresh_error",
-                {"source": source_key, "error": str(exc)},
+                {
+                    "source": source_key,
+                    "error": str(exc),
+                    "data_origin": self.get_data_origin(source),
+                },
             )
             return
+
+        refreshed_at = datetime.now(timezone.utc).isoformat()
 
         with self._data_lock:
             if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY):
@@ -164,15 +191,24 @@ class AppController:
             else:
                 self.events_fxstreet = list(events)
                 refresh_key = "last_refresh_fxstreet"
+            self._data_origin[source_key] = "network"
+            self._data_timestamp[source_key] = refreshed_at
 
-        ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        if not self.settings.set(refresh_key, ts):
+        if not self._cache.save(source, list(events), refreshed_at):
+            logger.warning("%s: impossibile aggiornare la cache persistente", source_key)
+
+        if not self.settings.set(refresh_key, refreshed_at):
             logger.warning("%s: impossibile persistere last refresh", source_key)
 
         logger.info("%s: refresh completato, %d eventi", source_key, len(events))
         self._notify(
             "calendar_refreshed",
-            {"source": source_key, "count": len(events), "timestamp": ts},
+            {
+                "source": source_key,
+                "count": len(events),
+                "timestamp": refreshed_at,
+                "data_origin": "network",
+            },
         )
 
     def filter_events(
@@ -182,6 +218,7 @@ class AppController:
         impact: str = "ALL",
         date: str = "",
         tz_offset_hours: float = 0.0,
+        timezone_name: str = "",
     ) -> list[CalendarEvent]:
         with self._data_lock:
             source_events = (
@@ -192,7 +229,10 @@ class AppController:
             events = list(source_events)
 
         events = self._filter_past_events(events)
-        events = self._convert_events_tz(events, tz_offset_hours)
+        if timezone_name:
+            events = self._convert_events_timezone(events, timezone_name)
+        else:
+            events = self._convert_events_tz(events, tz_offset_hours)
 
         if date:
             events = [event for event in events if event.date == date]
@@ -238,11 +278,48 @@ class AppController:
         return kept
 
     @staticmethod
-    def _convert_events_tz(
+    def _timezone_from_spec(timezone_name: str) -> tzinfo:
+        text = timezone_name.strip()
+        if not text or text.upper() == "UTC":
+            return timezone.utc
+
+        upper = text.upper()
+        if upper.startswith("UTC") and len(text) > 3:
+            suffix = text[3:]
+            sign = 1
+            if suffix.startswith("+"):
+                suffix = suffix[1:]
+            elif suffix.startswith("-"):
+                sign = -1
+                suffix = suffix[1:]
+            else:
+                logger.warning("Timezone offset non valido %r, uso UTC", timezone_name)
+                return timezone.utc
+
+            try:
+                hours_text, minutes_text = suffix.split(":", 1)
+                hours = int(hours_text)
+                minutes = int(minutes_text)
+            except (TypeError, ValueError):
+                logger.warning("Timezone offset non valido %r, uso UTC", timezone_name)
+                return timezone.utc
+
+            if hours > 14 or minutes < 0 or minutes >= 60 or (hours == 14 and minutes):
+                logger.warning("Timezone offset fuori intervallo %r, uso UTC", timezone_name)
+                return timezone.utc
+            return timezone(sign * timedelta(hours=hours, minutes=minutes))
+
+        try:
+            return ZoneInfo(text)
+        except ZoneInfoNotFoundError:
+            logger.warning("Timezone IANA sconosciuta %r, uso UTC", timezone_name)
+            return timezone.utc
+
+    @staticmethod
+    def _convert_events_to_zone(
         events: list[CalendarEvent],
-        offset_hours: float,
+        target_tz: tzinfo,
     ) -> list[CalendarEvent]:
-        target_tz = timezone(timedelta(hours=offset_hours))
         converted: list[CalendarEvent] = []
 
         for event in events:
@@ -269,13 +346,39 @@ class AppController:
             )
         return converted
 
+    @staticmethod
+    def _convert_events_tz(
+        events: list[CalendarEvent],
+        offset_hours: float,
+    ) -> list[CalendarEvent]:
+        target_tz = timezone(timedelta(hours=offset_hours))
+        return AppController._convert_events_to_zone(events, target_tz)
+
+    @staticmethod
+    def _convert_events_timezone(
+        events: list[CalendarEvent],
+        timezone_name: str,
+    ) -> list[CalendarEvent]:
+        target_tz = AppController._timezone_from_spec(timezone_name)
+        return AppController._convert_events_to_zone(events, target_tz)
+
     def get_last_refresh(self, source: CalendarSource) -> str:
+        source_key = source.value
+        with self._data_lock:
+            timestamp = self._data_timestamp.get(source_key, "")
+        if timestamp:
+            return timestamp
+
         key = (
             "last_refresh_ig"
             if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY)
             else "last_refresh_fxstreet"
         )
         return str(self.settings.get(key))
+
+    def get_data_origin(self, source: CalendarSource) -> str:
+        with self._data_lock:
+            return self._data_origin.get(source.value, "empty")
 
     def begin_shutdown(self) -> None:
         """Stop accepting work and prevent callbacks into a closing UI."""
