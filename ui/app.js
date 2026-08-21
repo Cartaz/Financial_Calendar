@@ -11,6 +11,8 @@ const state = {
   refreshing: new Set(),
   logs: [],
   requestSerial: 0,
+  autoRefreshMinutes: 15,
+  freshnessTimer: null,
 };
 
 const els = {
@@ -25,6 +27,7 @@ const els = {
   region: document.getElementById("filter-region"),
   impact: document.getElementById("filter-impact"),
   timezone: document.getElementById("filter-timezone"),
+  autoRefresh: document.getElementById("auto-refresh"),
   refreshSource: document.getElementById("refresh-source"),
   refreshAll: document.getElementById("refresh-all"),
   sourceKicker: document.getElementById("source-kicker"),
@@ -44,6 +47,7 @@ const els = {
   emptyState: document.getElementById("empty-state"),
   eventCount: document.getElementById("event-count"),
   lastRefresh: document.getElementById("last-refresh"),
+  freshnessLabel: document.getElementById("freshness-label"),
   logCount: document.getElementById("log-count"),
   logViewer: document.getElementById("log-viewer"),
   copyLog: document.getElementById("copy-log"),
@@ -89,8 +93,13 @@ function formatOffset(offset) {
   return `UTC${sign}${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+function localTimezoneName() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
 function currentTimezoneSpec() {
-  return els.timezone.value || "UTC";
+  const selected = els.timezone.value || "local";
+  return selected === "local" ? localTimezoneName() : selected;
 }
 
 function calendarDateToBackend(value) {
@@ -110,12 +119,22 @@ function buildSelect(select, values, labeler) {
   }
 }
 
-function buildTimezoneSelect() {
+function ensureSelectValue(select, value, label = value) {
+  if (!value) return;
+  const exists = [...select.options].some((option) => option.value === value);
+  if (exists) return;
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  select.append(option);
+}
+
+function buildTimezoneSelect(preference = "local") {
   els.timezone.replaceChildren();
-  const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const localZone = localTimezoneName();
 
   const local = document.createElement("option");
-  local.value = localZone;
+  local.value = "local";
   local.textContent = `Locale (${localZone})`;
   els.timezone.append(local);
 
@@ -136,7 +155,6 @@ function buildTimezoneSelect() {
   ];
 
   for (const zone of namedZones) {
-    if (zone === localZone) continue;
     const option = document.createElement("option");
     option.value = zone;
     option.textContent = zone;
@@ -145,12 +163,33 @@ function buildTimezoneSelect() {
 
   for (let offset = -12; offset <= 14; offset += 0.5) {
     if (offset === 0) continue;
+    const spec = formatOffset(offset);
     const option = document.createElement("option");
-    option.value = formatOffset(offset);
-    option.textContent = `${formatOffset(offset)} (fisso)`;
+    option.value = spec;
+    option.textContent = `${spec} (fisso)`;
     els.timezone.append(option);
   }
-  els.timezone.value = localZone;
+
+  ensureSelectValue(els.timezone, preference);
+  els.timezone.value = preference || "local";
+  if (!els.timezone.value) els.timezone.value = "local";
+}
+
+function buildAutoRefreshSelect(selectedMinutes) {
+  els.autoRefresh.replaceChildren();
+  const options = normalizeList(state.initial?.auto_refresh_options);
+  for (const raw of options) {
+    const minutes = Number(raw);
+    if (!Number.isFinite(minutes)) continue;
+    const option = document.createElement("option");
+    option.value = String(minutes);
+    option.textContent = minutes === 0 ? "Manuale" : `${minutes} min`;
+    els.autoRefresh.append(option);
+  }
+  const selected = String(Number(selectedMinutes));
+  els.autoRefresh.value = selected;
+  if (!els.autoRefresh.value) els.autoRefresh.value = "15";
+  state.autoRefreshMinutes = Number(els.autoRefresh.value) || 0;
 }
 
 function setConnectionReady(version) {
@@ -163,10 +202,54 @@ function setConnectionError(message) {
   els.connectionLabel.textContent = message;
 }
 
+function refreshDate(source) {
+  const value = source?.last_refresh_iso || "";
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function freshnessAgeMinutes(source) {
+  const parsed = refreshDate(source);
+  if (!parsed) return null;
+  return Math.max(0, (Date.now() - parsed.getTime()) / 60000);
+}
+
+function freshnessText(source) {
+  const age = freshnessAgeMinutes(source);
+  if (age === null) return "nessun aggiornamento";
+  if (age < 1.5) return "adesso";
+  if (age < 60) return `${Math.floor(age)} min fa`;
+  if (age < 24 * 60) return `${Math.floor(age / 60)} h fa`;
+  return `${Math.floor(age / (24 * 60))} g fa`;
+}
+
+function freshnessThresholdMinutes() {
+  return state.autoRefreshMinutes > 0
+    ? Math.max(15, state.autoRefreshMinutes * 2)
+    : 60;
+}
+
+function sourceIsStale(source) {
+  const age = freshnessAgeMinutes(source);
+  return age !== null && age > freshnessThresholdMinutes();
+}
+
+function sourceFreshnessSummary(source) {
+  if (!source || !refreshDate(source)) return "In attesa dati";
+  const ageText = freshnessText(source);
+  if (source.data_origin === "cache") return `Salvati · ${ageText}`;
+  if (sourceIsStale(source)) return `Non recenti · ${ageText}`;
+  return `Aggiornati · ${ageText}`;
+}
+
 function updateSourceTabs() {
   for (const tab of els.sourceTabs) {
-    const selected = tab.dataset.source === state.activeSource;
+    const sourceKey = tab.dataset.source;
+    const selected = sourceKey === state.activeSource;
     tab.setAttribute("aria-pressed", String(selected));
+    const freshness = tab.querySelector(".source-freshness");
+    if (freshness) freshness.textContent = sourceFreshnessSummary(sourceState(sourceKey));
   }
 }
 
@@ -177,6 +260,12 @@ function applySourceFilters() {
   els.impact.value = source.selected_impact || "ALL";
 }
 
+function applySourceSort() {
+  const source = sourceState();
+  state.sortKey = source?.sort_key || null;
+  state.sortDirection = source?.sort_direction === "desc" ? "desc" : "asc";
+}
+
 function updateSourceHeader() {
   const source = sourceState();
   if (!source) return;
@@ -184,6 +273,7 @@ function updateSourceHeader() {
   els.sourceTitle.textContent = source.name;
   els.sourceDescription.textContent = source.description;
   els.lastRefresh.textContent = source.last_refresh || "mai";
+  els.freshnessLabel.textContent = freshnessText(source);
   updateActivityState();
 }
 
@@ -196,7 +286,7 @@ function updateActivityState() {
   els.refreshAll.classList.toggle("is-active", state.refreshing.size > 0);
   els.refreshAll.disabled = state.refreshing.size >= state.sources.size && state.sources.size > 0;
 
-  els.sourceStatus.classList.remove("is-ready", "is-running", "is-error");
+  els.sourceStatus.classList.remove("is-ready", "is-running", "is-error", "is-stale");
   if (running) {
     els.sourceStatus.classList.add("is-running");
     els.sourceStatusLabel.textContent = "Aggiornamento…";
@@ -204,21 +294,37 @@ function updateActivityState() {
   } else if (!els.errorBanner.hidden) {
     els.sourceStatus.classList.add("is-error");
     if (source?.data_origin === "cache") {
-      els.sourceStatusLabel.textContent = "Errore · dati salvati";
+      els.sourceStatusLabel.textContent = `Errore · dati salvati · ${freshnessText(source)}`;
     } else if (source?.data_origin === "network") {
-      els.sourceStatusLabel.textContent = "Errore · dati precedenti";
+      els.sourceStatusLabel.textContent = `Errore · dati precedenti · ${freshnessText(source)}`;
     } else {
       els.sourceStatusLabel.textContent = "Errore · nessun dato";
     }
   } else if (source?.data_origin === "cache") {
-    els.sourceStatus.classList.add("is-ready");
-    els.sourceStatusLabel.textContent = "Dati salvati";
+    els.sourceStatus.classList.add(sourceIsStale(source) ? "is-stale" : "is-ready");
+    els.sourceStatusLabel.textContent = `Dati salvati · ${freshnessText(source)}`;
   } else if (source?.data_origin === "network") {
-    els.sourceStatus.classList.add("is-ready");
-    els.sourceStatusLabel.textContent = "Dati aggiornati";
+    els.sourceStatus.classList.add(sourceIsStale(source) ? "is-stale" : "is-ready");
+    els.sourceStatusLabel.textContent = sourceIsStale(source)
+      ? `Dati non recenti · ${freshnessText(source)}`
+      : `Dati aggiornati · ${freshnessText(source)}`;
   } else {
     els.sourceStatusLabel.textContent = "In attesa dati";
   }
+}
+
+function updateFreshnessUi() {
+  updateSourceTabs();
+  const source = sourceState();
+  els.freshnessLabel.textContent = freshnessText(source);
+  updateActivityState();
+}
+
+function startFreshnessClock() {
+  if (state.freshnessTimer !== null) {
+    window.clearInterval(state.freshnessTimer);
+  }
+  state.freshnessTimer = window.setInterval(updateFreshnessUi, 30000);
 }
 
 function orderedColumns() {
@@ -324,15 +430,43 @@ async function onHeaderDrop(event) {
   }
 }
 
-function toggleSort(key) {
+async function toggleSort(key) {
+  const source = sourceState();
+  if (!source) return;
+
+  const previousKey = state.sortKey;
+  const previousDirection = state.sortDirection;
   if (state.sortKey === key) {
     state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
   } else {
     state.sortKey = key;
     state.sortDirection = "asc";
   }
+
+  source.sort_key = state.sortKey || "";
+  source.sort_direction = state.sortDirection;
   renderHeader();
   renderBody();
+
+  try {
+    const saved = await bridgeCall(
+      "saveSort",
+      state.activeSource,
+      source.sort_key,
+      source.sort_direction,
+    );
+    if (saved) return;
+  } catch (error) {
+    // Revert below.
+  }
+
+  state.sortKey = previousKey;
+  state.sortDirection = previousDirection;
+  source.sort_key = previousKey || "";
+  source.sort_direction = previousDirection;
+  renderHeader();
+  renderBody();
+  showToast("Impossibile salvare l’ordinamento");
 }
 
 function comparableValue(event, key) {
@@ -483,16 +617,40 @@ async function persistFiltersAndReload() {
   await loadEvents();
 }
 
+async function persistUiState() {
+  state.autoRefreshMinutes = Number(els.autoRefresh.value) || 0;
+  try {
+    const saved = await bridgeCall(
+      "saveUiState",
+      state.activeSource,
+      els.timezone.value || "local",
+      els.date.value || "",
+      state.autoRefreshMinutes,
+    );
+    if (!saved) showToast("Impossibile salvare lo stato dell’interfaccia");
+    updateFreshnessUi();
+    return Boolean(saved);
+  } catch (error) {
+    showToast("Errore nel salvataggio dello stato");
+    return false;
+  }
+}
+
+async function persistUiStateAndReload() {
+  await persistUiState();
+  await loadEvents();
+}
+
 async function selectSource(sourceKey) {
   if (!state.sources.has(sourceKey) || sourceKey === state.activeSource) return;
   state.activeSource = sourceKey;
-  state.sortKey = null;
-  state.sortDirection = "asc";
   hideError();
-  updateSourceTabs();
   applySourceFilters();
+  applySourceSort();
+  updateSourceTabs();
   updateSourceHeader();
   renderHeader();
+  await persistUiState();
   await loadEvents();
 }
 
@@ -512,7 +670,7 @@ async function handleBackendEvent(eventName, payload) {
     const source = sourceState(sourceKey);
     if (source) source.refreshing = true;
     if (sourceKey === state.activeSource) hideError();
-    updateActivityState();
+    updateFreshnessUi();
     return;
   }
 
@@ -525,7 +683,7 @@ async function handleBackendEvent(eventName, payload) {
       await loadEvents();
       showToast(`${sourceState()?.name || "Calendario"}: ${payload.count ?? 0} eventi aggiornati`);
     }
-    updateActivityState();
+    updateFreshnessUi();
     return;
   }
 
@@ -537,7 +695,7 @@ async function handleBackendEvent(eventName, payload) {
     } else {
       showToast(`Aggiornamento ${sourceState(sourceKey)?.name || sourceKey} non riuscito`);
     }
-    updateActivityState();
+    updateFreshnessUi();
   }
 }
 
@@ -608,8 +766,17 @@ function bindControls() {
   }
   els.region.addEventListener("change", persistFiltersAndReload);
   els.impact.addEventListener("change", persistFiltersAndReload);
-  els.date.addEventListener("change", loadEvents);
-  els.timezone.addEventListener("change", loadEvents);
+  els.date.addEventListener("change", persistUiStateAndReload);
+  els.timezone.addEventListener("change", persistUiStateAndReload);
+  els.autoRefresh.addEventListener("change", async () => {
+    if (await persistUiState()) {
+      showToast(
+        state.autoRefreshMinutes === 0
+          ? "Auto-refresh disattivato"
+          : `Auto-refresh ogni ${state.autoRefreshMinutes} minuti`,
+      );
+    }
+  });
   els.refreshSource.addEventListener("click", () => state.bridge.refreshSource(state.activeSource));
   els.refreshAll.addEventListener("click", () => state.bridge.refreshAll());
   els.dismissError.addEventListener("click", hideError);
@@ -620,6 +787,7 @@ async function bootstrap() {
   try {
     state.initial = await bridgeCall("getInitialState");
     const meta = state.initial?.app || {};
+    const uiState = state.initial?.ui_state || {};
     els.appName.textContent = meta.name || "Calendario Finanziario";
     els.appDescription.textContent = meta.description || "Calendari economici";
     document.title = meta.name || "Calendario Finanziario";
@@ -629,12 +797,19 @@ async function bootstrap() {
       if (source.refreshing) state.refreshing.add(source.key);
     }
 
+    const preferredSource = uiState.active_source || "ig";
+    state.activeSource = state.sources.has(preferredSource) ? preferredSource : "ig";
+
     buildSelect(els.region, normalizeList(state.initial?.regions), regionLabel);
     buildSelect(els.impact, normalizeList(state.initial?.impacts), impactLabel);
-    buildTimezoneSelect();
+    buildTimezoneSelect(uiState.timezone_name || "local");
+    buildAutoRefreshSelect(uiState.auto_refresh_minutes ?? 15);
+    els.date.value = uiState.selected_date || "";
+
+    applySourceFilters();
+    applySourceSort();
     bindControls();
     updateSourceTabs();
-    applySourceFilters();
     updateSourceHeader();
     renderHeader();
     await loadEvents();
@@ -643,6 +818,7 @@ async function bootstrap() {
     state.logs = normalizeList(logs).slice(-250);
     renderLogs();
 
+    startFreshnessClock();
     setConnectionReady(meta.version || "—");
     els.app.setAttribute("aria-busy", "false");
     state.bridge.start();
