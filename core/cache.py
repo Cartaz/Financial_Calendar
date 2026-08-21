@@ -13,6 +13,7 @@ from pathlib import Path
 
 from config.constants import PathConfig
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
+from core.scraper_metrics import ScrapeMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,15 @@ class CalendarCache:
             len(events),
             refreshed_at,
         )
+        ScrapeMetrics(
+            source=source.value,
+            raw_count=len(events),
+            valid_count=len(events),
+            skipped_count=0,
+            duration_ms=0,
+            retries=0,
+            origin="cache",
+        ).log(logger)
         return CacheSnapshot(events=events, refreshed_at=refreshed_at)
 
     def save(
