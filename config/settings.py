@@ -17,6 +17,7 @@ from config.constants import CalendarDefaults, PathConfig
 logger = logging.getLogger(__name__)
 
 _AUTO_REFRESH_MINUTES = {0, 5, 15, 30, 60}
+_NOTIFICATION_LEAD_MINUTES = {0, 5, 15, 30, 60}
 _IG_SORT_KEYS = {
     "",
     "date",
@@ -40,6 +41,19 @@ _FXSTREET_SORT_KEYS = {
     "forecast",
     "previous",
 }
+_COMBINED_SORT_KEYS = {
+    "",
+    "date",
+    "time",
+    "country",
+    "impact",
+    "event_name",
+    "source",
+    "actual",
+    "forecast",
+    "previous",
+    "deviation",
+}
 
 
 @dataclass(slots=True)
@@ -50,11 +64,14 @@ class UserSettings:
     fxstreet_column_order: list[int] = field(
         default_factory=lambda: list(range(len(CalendarDefaults.FXSTREET_COLUMNS)))
     )
+    combined_column_order: list[int] = field(default_factory=lambda: list(range(10)))
 
     ig_selected_region: str = "ALL"
     ig_selected_impact: str = "ALL"
     fxstreet_selected_region: str = "ALL"
     fxstreet_selected_impact: str = "ALL"
+    combined_selected_region: str = "ALL"
+    combined_selected_impact: str = "ALL"
 
     last_refresh_ig: str = ""
     last_refresh_fxstreet: str = ""
@@ -63,10 +80,13 @@ class UserSettings:
     timezone_name: str = "local"
     selected_date: str = ""
     auto_refresh_minutes: int = 15
+    high_notification_minutes: int = 0
     ig_sort_key: str = ""
     ig_sort_direction: str = "asc"
     fxstreet_sort_key: str = ""
     fxstreet_sort_direction: str = "asc"
+    combined_sort_key: str = ""
+    combined_sort_direction: str = "asc"
     window_geometry: str = ""
 
 
@@ -103,11 +123,25 @@ def _normalize_selected_date(value: object) -> str:
     return parsed.isoformat()
 
 
+def _normalize_minutes(value: object, allowed: set[int], label: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{label} must be an integer")
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be an integer") from exc
+    if minutes not in allowed:
+        raise ValueError(f"unsupported {label} interval")
+    return minutes
+
+
 def _normalize_setting(key: str, value: Any) -> Any:
     if key == "ig_column_order":
         return _valid_column_order(value, len(CalendarDefaults.IG_COLUMNS))
     if key == "fxstreet_column_order":
         return _valid_column_order(value, len(CalendarDefaults.FXSTREET_COLUMNS))
+    if key == "combined_column_order":
+        return _valid_column_order(value, 10)
 
     if key.endswith("_selected_region"):
         text = str(value)
@@ -124,7 +158,7 @@ def _normalize_setting(key: str, value: Any) -> Any:
 
     if key == "active_source":
         text = str(value)
-        return text if text in {"ig", "fxstreet"} else "ig"
+        return text if text in {"ig", "fxstreet", "combined"} else "ig"
 
     if key == "timezone_name":
         return _normalize_timezone(value)
@@ -133,15 +167,10 @@ def _normalize_setting(key: str, value: Any) -> Any:
         return _normalize_selected_date(value)
 
     if key == "auto_refresh_minutes":
-        if isinstance(value, bool):
-            raise ValueError("auto refresh must be an integer")
-        try:
-            minutes = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("auto refresh must be an integer") from exc
-        if minutes not in _AUTO_REFRESH_MINUTES:
-            raise ValueError("unsupported auto refresh interval")
-        return minutes
+        return _normalize_minutes(value, _AUTO_REFRESH_MINUTES, "auto refresh")
+
+    if key == "high_notification_minutes":
+        return _normalize_minutes(value, _NOTIFICATION_LEAD_MINUTES, "notification lead")
 
     if key == "ig_sort_key":
         text = str(value)
@@ -151,7 +180,11 @@ def _normalize_setting(key: str, value: Any) -> Any:
         text = str(value)
         return text if text in _FXSTREET_SORT_KEYS else ""
 
-    if key in {"ig_sort_direction", "fxstreet_sort_direction"}:
+    if key == "combined_sort_key":
+        text = str(value)
+        return text if text in _COMBINED_SORT_KEYS else ""
+
+    if key in {"ig_sort_direction", "fxstreet_sort_direction", "combined_sort_direction"}:
         text = str(value)
         return text if text in {"asc", "desc"} else "asc"
 
@@ -196,8 +229,6 @@ class Settings:
                         )
                         normalized[key] = getattr(defaults, key)
 
-                # Old versions persisted two global filter keys. Migrate them
-                # only when the new per-source keys are absent.
                 legacy_region = raw.get("selected_region")
                 legacy_impact = raw.get("selected_impact")
                 if legacy_region is not None:

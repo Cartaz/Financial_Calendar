@@ -40,7 +40,7 @@ Per il logging di debug:
 ```text
 assets/       Icone e bandiere
 config/       Costanti e impostazioni persistenti
-core/         Modelli, controller, cache e scraper
+core/         Modelli, controller, cache, export, notifiche e scraper
 tests/        Test automatici
 ui/           Finestra Qt, bridge QWebChannel e frontend HTML/CSS/JS
 
@@ -66,11 +66,13 @@ ui.window / Qt WebEngine
 HTML + CSS + JavaScript
 ```
 
-Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, filtri, timer di aggiornamento e lavoro in background; il frontend gestisce presentazione e navigazione locale del dataset già ricevuto.
+Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, timer, notifiche desktop ed export; il frontend gestisce presentazione e navigazione locale del dataset già ricevuto.
 
 ## Funzioni principali
 
 - calendari ForexFactory/Faireconomy e FXStreet
+- vista combinata `Tutti` con filtri, colonne e ordinamento persistenti indipendenti
+- indicazione non distruttiva dei probabili duplicati tra le due sorgenti, senza eliminare righe
 - refresh asincrono
 - auto-refresh configurabile: Manuale / 5 / 15 / 30 / 60 minuti
 - indicatore di freschezza indipendente per ciascuna sorgente
@@ -85,10 +87,14 @@ Non viene avviato alcun server HTTP locale e non è richiesto alcun browser este
 - countdown locale per gli eventi futuri
 - indicazione del prossimo evento HIGH e sua evidenziazione discreta
 - attenuazione degli eventi già trascorsi
+- notifiche desktop opzionali per eventi HIGH, configurabili a 5 / 15 / 30 / 60 minuti prima
+- notifiche Linux tramite lo standard Freedesktop D-Bus, senza modalità tray e senza processi `notify-send`
+- export CSV degli eventi attualmente visibili dopo filtri, ricerca e intervallo rapido
+- export ICS degli eventi visibili con timestamp UTC e UID stabili
 - conversione timezone DST-safe tramite zone IANA, con offset UTC fissi ancora disponibili
 - stato sorgente distinto tra dati aggiornati, dati salvati, dati non recenti e assenza di dati
-- ripristino della sorgente attiva, data, timezone e intervallo auto-refresh
-- ordinamento e riordino persistente delle colonne, separato per sorgente
+- ripristino della sorgente attiva, data, timezone, intervallo auto-refresh e preferenza notifiche
+- ordinamento e riordino persistente delle colonne, separato per sorgente e vista combinata
 - ripristino di dimensione e posizione della finestra
 - bandiere dei paesi
 - errori leggibili mantenendo visibili gli ultimi dati reali
@@ -98,7 +104,7 @@ Non viene avviato alcun server HTTP locale e non è richiesto alcun browser este
 
 ## Roadmap
 
-Lo sviluppo pianificato è tracciato in `ROADMAP.md`, con checklist per affidabilità, aggiornamento automatico, persistenza UX, navigazione, notifiche ed export.
+Lo sviluppo pianificato è tracciato in `ROADMAP.md`. Le milestone 1.2–1.5 coprono affidabilità, persistenza UX, navigazione e strumenti operativi; il lavoro residuo è concentrato nell'hardening e nell'osservabilità dei parser e dei refresh.
 
 ## Sviluppo e test
 
@@ -110,6 +116,7 @@ Le dipendenze di sviluppo non sono mantenute in file di configurazione aggiuntiv
 .venv/bin/ruff check --target-version py312 --select E4,E7,E9,F main.py config core ui tests
 node --check ui/app.js
 node --check ui/navigation.js
+node --check ui/operations.js
 QT_QPA_PLATFORM=offscreen \
 QTWEBENGINE_DISABLE_SANDBOX=1 \
 QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --no-sandbox" \

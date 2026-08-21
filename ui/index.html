@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="ux.css">
   <link rel="stylesheet" href="navigation.css">
+  <link rel="stylesheet" href="operations.css">
 </head>
 <body>
   <div class="app-shell" id="app" aria-busy="true">
@@ -59,6 +60,14 @@
             <small class="source-freshness">In attesa dati</small>
           </span>
         </button>
+        <button class="source-tab" type="button" data-source="combined" aria-pressed="false">
+          <span class="source-mark" aria-hidden="true"></span>
+          <span>
+            <strong>Tutti</strong>
+            <small>Vista combinata</small>
+            <small class="source-freshness">In attesa dati</small>
+          </span>
+        </button>
       </nav>
 
       <form class="filters" id="filters" autocomplete="off">
@@ -95,6 +104,19 @@
           <label for="auto-refresh">Auto-refresh</label>
           <div class="field-shell neo-inset-small select-shell">
             <select id="auto-refresh"></select>
+          </div>
+        </div>
+
+        <div class="field-group notification-field">
+          <label for="notification-lead">Notifiche HIGH</label>
+          <div class="field-shell neo-inset-small select-shell">
+            <select id="notification-lead">
+              <option value="0">Disattivate</option>
+              <option value="5">5 min prima</option>
+              <option value="15">15 min prima</option>
+              <option value="30">30 min prima</option>
+              <option value="60">60 min prima</option>
+            </select>
           </div>
         </div>
 
@@ -184,6 +206,10 @@
         <span class="footer-separator" aria-hidden="true"></span>
         <span>Freschezza: <strong id="freshness-label">nessun dato</strong></span>
         <span class="footer-spacer"></span>
+        <div class="export-actions" aria-label="Esporta eventi visibili">
+          <button class="text-button export-button neo-raised-soft" id="export-csv" type="button">CSV</button>
+          <button class="text-button export-button neo-raised-soft" id="export-ics" type="button">ICS</button>
+        </div>
         <span class="drag-hint">Trascina le intestazioni per riordinarle</span>
       </footer>
 
@@ -206,5 +232,6 @@
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script src="app.js" defer></script>
   <script src="navigation.js" defer></script>
+  <script src="operations.js" defer></script>
 </body>
 </html>
