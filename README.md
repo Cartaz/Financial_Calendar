@@ -41,13 +41,13 @@ Per il logging di debug:
 assets/       Icone e bandiere
 config/       Costanti e impostazioni persistenti
 core/         Modelli, controller, cache, export, notifiche e scraper
-tests/        Test automatici
+tests/        Test automatici e fixture anonimizzate dei feed
 ui/           Finestra Qt, bridge QWebChannel e frontend HTML/CSS/JS
 
 install.sh    Installazione locale nella .venv
 main.py       Entry point
 requirements.txt
-ROADMAP.md    Piano di evoluzione del programma
+ROADMAP.md    Roadmap di sviluppo completata
 ```
 
 Le cartelle applicative principali sono quindi `core`, `config`, `assets`, `tests` e `ui`.
@@ -66,20 +66,24 @@ ui.window / Qt WebEngine
 HTML + CSS + JavaScript
 ```
 
-Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, timer, notifiche desktop ed export; il frontend gestisce presentazione e navigazione locale del dataset già ricevuto.
+Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, timer, notifiche desktop, export e osservabilità dei refresh; il frontend gestisce presentazione e navigazione locale del dataset già ricevuto.
 
 ## Funzioni principali
 
 - calendari ForexFactory/Faireconomy e FXStreet
 - vista combinata `Tutti` con filtri, colonne e ordinamento persistenti indipendenti
 - indicazione non distruttiva dei probabili duplicati tra le due sorgenti, senza eliminare righe
-- refresh asincrono
+- refresh asincrono e indipendente per sorgente
 - auto-refresh configurabile: Manuale / 5 / 15 / 30 / 60 minuti
 - indicatore di freschezza indipendente per ciascuna sorgente
 - cache persistente dell'ultimo calendario valido per sorgente
 - avvio con dati salvati prima del refresh di rete
 - mantenimento degli ultimi dati reali se un refresh fallisce
+- funzionamento parziale quando una sorgente è disponibile e l'altra è in errore
 - timestamp di refresh interni in ISO-8601 UTC
+- metriche di refresh nel log: durata, raw, validi, scartati, retry e origine cache/rete
+- warning automatico quando almeno il 20% di un campione di almeno 5 record raw viene scartato dal parser
+- fixture anonimizzate basate sulla struttura reale dei payload di entrambe le API
 - filtri indipendenti per data, area e impatto
 - ricerca testuale locale su evento, paese, impatto e valori economici
 - filtri rapidi Tutti / Oggi / Domani / Prossime 24h
@@ -104,7 +108,7 @@ Non viene avviato alcun server HTTP locale e non è richiesto alcun browser este
 
 ## Roadmap
 
-Lo sviluppo pianificato è tracciato in `ROADMAP.md`. Le milestone 1.2–1.5 coprono affidabilità, persistenza UX, navigazione e strumenti operativi; il lavoro residuo è concentrato nell'hardening e nell'osservabilità dei parser e dei refresh.
+La roadmap in `ROADMAP.md` è **completata**: milestone 1.2–1.5 e hardening pianificato risultano implementati e coperti da test automatici.
 
 ## Sviluppo e test
 
@@ -122,5 +126,7 @@ QTWEBENGINE_DISABLE_SANDBOX=1 \
 QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --no-sandbox" \
   .venv/bin/python -m pytest tests -q
 ```
+
+Le fixture dei feed usate dai test sono in `tests/fixtures/` e non vengono mai usate come dati di fallback runtime.
 
 Non sono necessari `pyproject.toml`, package metadata o altri sistemi di packaging Python.
