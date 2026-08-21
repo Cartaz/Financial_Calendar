@@ -6,8 +6,6 @@ import json
 import logging
 from collections import deque
 from datetime import datetime
-from typing import Callable
-
 from PySide6.QtCore import QObject, Signal, Slot
 
 from config.constants import AppMeta, CalendarDefaults
@@ -65,17 +63,11 @@ class CalendarBridge(QObject):
         settings: Settings,
         *,
         debug: bool = False,
-        tray_available: bool = False,
-        hide_callback: Callable[[], None] | None = None,
-        quit_callback: Callable[[], None] | None = None,
     ) -> None:
         super().__init__()
         self._controller = controller
         self._settings = settings
         self._debug = debug
-        self._tray_available = tray_available
-        self._hide_callback = hide_callback
-        self._quit_callback = quit_callback
         self._started = False
         self._logs: deque[dict[str, str]] = deque(maxlen=250)
 
@@ -170,7 +162,6 @@ class CalendarBridge(QObject):
             "impacts": ["ALL", *CalendarDefaults.IMPACT_LEVELS],
             "flag_codes": dict(CalendarDefaults.FLAG_CODES),
             "debug": self._debug,
-            "tray_available": self._tray_available,
         }
 
     @Slot(str, str, str, str, float, result="QVariantList")
@@ -236,16 +227,6 @@ class CalendarBridge(QObject):
     @Slot(result="QVariantList")
     def getRecentLogs(self) -> list[dict[str, str]]:
         return list(self._logs)
-
-    @Slot()
-    def hideWindow(self) -> None:
-        if self._tray_available and self._hide_callback is not None:
-            self._hide_callback()
-
-    @Slot()
-    def quitApplication(self) -> None:
-        if self._quit_callback is not None:
-            self._quit_callback()
 
 
 class WebLogHandler(logging.Handler):

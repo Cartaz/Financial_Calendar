@@ -46,3 +46,33 @@ def test_frontend_has_accessibility_and_reduced_motion_guards() -> None:
     assert "aria-pressed" in html
     assert ":focus-visible" in css
     assert "prefers-reduced-motion: reduce" in css
+
+
+
+def test_frontend_is_constrained_to_window_and_table_owns_scrolling() -> None:
+    css = (ROOT / "web" / "viewport.css").read_text(encoding="utf-8")
+    window = (ROOT / "web_ui" / "window.py").read_text(encoding="utf-8")
+
+    assert "_install_viewport_styles" in window
+    assert 'web_dir / "viewport.css"' in window
+    assert "height: 100vh;" in css
+    assert "max-height: 100vh;" in css
+    assert "overflow: hidden;" in css
+    assert ".table-shell {" in css
+    assert "flex: 1 1 0;" in css
+    assert ".table-scroll {" in css
+    assert "max-height: none;" in css
+    assert "overflow: auto;" in css
+
+
+def test_system_tray_integration_is_removed() -> None:
+    main = (ROOT / "main.py").read_text(encoding="utf-8")
+    window = (ROOT / "web_ui" / "window.py").read_text(encoding="utf-8")
+    bridge = (ROOT / "web_ui" / "bridge.py").read_text(encoding="utf-8")
+
+    assert not (ROOT / "web_ui" / "tray.py").exists()
+    assert "TrayIconManager" not in main
+    assert "tray_available" not in window
+    assert "tray_available" not in bridge
+    assert "def closeEvent" in window
+    assert "app.quit()" in window

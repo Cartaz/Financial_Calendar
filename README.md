@@ -55,16 +55,14 @@ No local HTTP server, external browser or JavaScript framework is required. The 
 - source-specific refresh plus refresh-all
 - readable backend error state while retaining previous real data
 - collapsible application log viewer
-- system-tray integration when supported by the desktop environment
 - atomically persisted XDG settings
-- responsive dark-neumorphic HTML interface
+- responsive dark-neumorphic HTML interface constrained to the application viewport
 - visible keyboard focus and reduced-motion support
 
 ## Keyboard shortcuts
 
 - `Ctrl+R` — refresh ForexFactory
 - `Ctrl+F` — refresh FXStreet
-- `Ctrl+M` — hide the main window when a system tray is available
 - `Ctrl+Q` — quit
 
 ## Data-integrity rules
@@ -77,7 +75,7 @@ Production refreshes never substitute fabricated sample data. Network, schema, o
 main.py              Application bootstrap
 config/              Constants and persisted settings
 core/                Models, event bus, scrapers and application controller
-web_ui/              Qt WebEngine window, QWebChannel bridge and tray
+web_ui/              Qt WebEngine window and QWebChannel bridge
 web/                  HTML, CSS and JavaScript frontend
 assets/               Icons and country flags
 install.sh            Local XDG/KDE installation helper

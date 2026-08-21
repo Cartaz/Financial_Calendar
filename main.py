@@ -12,7 +12,6 @@ from config.constants import AppMeta, PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from web_ui.bridge import WebLogHandler
-from web_ui.tray import TrayIconManager
 from web_ui.window import CalendarWindow
 
 
@@ -39,18 +38,13 @@ def main() -> int:
     app.setApplicationDisplayName(AppMeta.DISPLAY_NAME)
     app.setApplicationVersion(AppMeta.VERSION)
     app.setDesktopFileName("financial_calendar")
+    app.setQuitOnLastWindowClosed(True)
 
     controller = AppController(settings, debug=args.debug)
     app.aboutToQuit.connect(controller.begin_shutdown)
 
-    tray_available = TrayIconManager.is_available()
     try:
-        window = CalendarWindow(
-            controller,
-            settings,
-            debug=args.debug,
-            tray_available=tray_available,
-        )
+        window = CalendarWindow(controller, settings, debug=args.debug)
     except Exception:
         logging.getLogger(__name__).exception("Impossibile inizializzare la UI web")
         controller.shutdown()
@@ -62,21 +56,12 @@ def main() -> int:
     web_log_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
     logging.getLogger().addHandler(web_log_handler)
 
-    tray_manager = (
-        TrayIconManager(window, controller.refresh_all)
-        if tray_available
-        else None
-    )
-
     window.show()
     exit_code = app.exec()
 
     logging.getLogger().removeHandler(web_log_handler)
     controller.shutdown()
     settings.save()
-
-    if tray_manager is not None:
-        del tray_manager
     return exit_code
 
 

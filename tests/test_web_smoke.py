@@ -22,7 +22,7 @@ def test_webengine_frontend_loads_offscreen(monkeypatch, tmp_path) -> None:
     controller = AppController(settings)
     monkeypatch.setattr(controller, "refresh_all", lambda: None)
 
-    window = CalendarWindow(controller, settings, tray_available=False)
+    window = CalendarWindow(controller, settings)
     loaded: list[bool] = []
     loop = QEventLoop()
 
