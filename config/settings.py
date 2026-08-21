@@ -52,6 +52,7 @@ _COMBINED_SORT_KEYS = {
     "actual",
     "forecast",
     "previous",
+    "deviation",
 }
 
 
