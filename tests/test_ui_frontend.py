@@ -129,11 +129,14 @@ def test_redundant_header_copy_is_hidden_without_breaking_js_hooks() -> None:
     assert 'id="refresh-all"' in html
     assert 'id="source-title"' in html
     assert 'id="source-description"' in html
-    assert ".topbar h1," in css
-    assert ".topbar-actions {" not in css
-    assert ".topbar-actions" in css
-    assert "display: none !important;" in css
-    assert ".panel-heading h2," in css
+    assert (
+        ".topbar h1,\n.app-description,\n.topbar-actions {\n  display: none !important;"
+        in css
+    )
+    assert (
+        ".panel-heading h2,\n.panel-description {\n  display: none !important;"
+        in css
+    )
     assert ".topbar .eyebrow" in css
     assert ".panel-heading .eyebrow" in css
 
