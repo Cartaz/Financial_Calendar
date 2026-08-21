@@ -106,6 +106,19 @@ def test_frontend_is_constrained_to_window_and_table_owns_scrolling() -> None:
     assert "overflow: auto;" in css
 
 
+def test_windowed_layout_compacts_before_table_space_is_exhausted() -> None:
+    css = (UI / "viewport.css").read_text(encoding="utf-8")
+
+    assert "@media (max-height: 900px)" in css
+    assert "@media (max-height: 720px)" in css
+    assert ".source-tab small:not(.source-freshness)" in css
+    assert "min-height: 44px;" in css
+    assert "height: 36px;" in css
+    assert "height: 38px;" in css
+    assert ".app-description," in css
+    assert ".panel-description" in css
+
+
 def test_system_tray_integration_is_removed() -> None:
     main = (ROOT / "main.py").read_text(encoding="utf-8")
     window = (UI / "window.py").read_text(encoding="utf-8")
