@@ -7,6 +7,7 @@
   <title>Calendario Finanziario</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="ux.css">
+  <link rel="stylesheet" href="navigation.css">
 </head>
 <body>
   <div class="app-shell" id="app" aria-busy="true">
@@ -143,6 +144,20 @@
         <button class="dismiss-button" id="dismiss-error" type="button" aria-label="Chiudi messaggio di errore">×</button>
       </section>
 
+      <section class="calendar-tools" aria-label="Navigazione eventi">
+        <div class="search-shell neo-inset-small">
+          <label class="sr-only" for="event-search">Cerca evento</label>
+          <input id="event-search" type="search" placeholder="Cerca evento…" autocomplete="off">
+        </div>
+        <div class="quick-range neo-inset-small" aria-label="Intervallo rapido">
+          <button class="quick-range-button" type="button" data-quick-range="all" aria-pressed="true">Tutti</button>
+          <button class="quick-range-button" type="button" data-quick-range="today" aria-pressed="false">Oggi</button>
+          <button class="quick-range-button" type="button" data-quick-range="tomorrow" aria-pressed="false">Domani</button>
+          <button class="quick-range-button" type="button" data-quick-range="next24" aria-pressed="false">Prossime 24h</button>
+        </div>
+        <div class="next-event-summary" id="next-event-summary" aria-live="polite">Nessun evento HIGH imminente</div>
+      </section>
+
       <div class="table-shell neo-inset">
         <div class="table-scroll" tabindex="0" aria-label="Eventi del calendario economico">
           <table id="events-table">
@@ -157,7 +172,7 @@
               <path d="M8 3v4M16 3v4M3 9h18M8 14h8M8 18h5"></path>
             </svg>
             <strong>Nessun evento visibile</strong>
-            <span>Modifica i filtri oppure aggiorna la sorgente.</span>
+            <span>Modifica i filtri, la ricerca oppure aggiorna la sorgente.</span>
           </div>
         </div>
       </div>
@@ -190,5 +205,6 @@
 
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script src="app.js" defer></script>
+  <script src="navigation.js" defer></script>
 </body>
 </html>

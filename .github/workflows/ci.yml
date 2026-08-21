@@ -48,7 +48,9 @@ jobs:
         run: ruff check --target-version py312 --select E4,E7,E9,F main.py config core ui tests
 
       - name: JavaScript syntax check
-        run: node --check ui/app.js
+        run: |
+          node --check ui/app.js
+          node --check ui/navigation.js
 
       - name: Test suite
         run: python -m pytest tests -q

@@ -28,11 +28,11 @@ Criterio di completamento: alla riapertura l'app deve ripristinare lo stato oper
 
 ## 1.4 — Navigazione del calendario
 
-- [ ] Ricerca testuale locale degli eventi.
-- [ ] Filtri rapidi Oggi / Domani / Prossime 24h.
-- [ ] Countdown per eventi futuri.
-- [ ] Evidenziazione discreta del prossimo evento importante.
-- [ ] Attenuazione visuale degli eventi già trascorsi.
+- [x] Ricerca testuale locale degli eventi.
+- [x] Filtri rapidi Oggi / Domani / Prossime 24h.
+- [x] Countdown per eventi futuri.
+- [x] Evidenziazione discreta del prossimo evento importante.
+- [x] Attenuazione visuale degli eventi già trascorsi.
 
 Criterio di completamento: trovare e contestualizzare un evento imminente deve richiedere pochi secondi anche con molti eventi in tabella.
 
