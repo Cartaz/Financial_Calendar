@@ -10,6 +10,8 @@ La UI usa superfici `#141414` e `#FF6600` come unico colore accent.
 - Linux desktop
 - accesso a Internet per installare le dipendenze e aggiornare i calendari
 
+Dopo almeno un refresh riuscito, l'app può riaprire l'ultimo calendario valido anche temporaneamente senza rete grazie alla cache locale persistente.
+
 ## Installazione
 
 Dalla root della repository:
@@ -38,13 +40,14 @@ Per il logging di debug:
 ```text
 assets/       Icone e bandiere
 config/       Costanti e impostazioni persistenti
-core/         Modelli, controller e scraper
+core/         Modelli, controller, cache e scraper
 tests/        Test automatici
 ui/           Finestra Qt, bridge QWebChannel e frontend HTML/CSS/JS
 
 install.sh    Installazione locale nella .venv
 main.py       Entry point
 requirements.txt
+ROADMAP.md    Piano di evoluzione del programma
 ```
 
 Le cartelle applicative principali sono quindi `core`, `config`, `assets`, `tests` e `ui`.
@@ -63,12 +66,15 @@ ui.window / Qt WebEngine
 HTML + CSS + JavaScript
 ```
 
-Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, persistenza, filtri e lavoro in background; il frontend gestisce esclusivamente la presentazione.
+Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, filtri e lavoro in background; il frontend gestisce esclusivamente la presentazione.
 
 ## Funzioni principali
 
 - calendari ForexFactory/Faireconomy e FXStreet
 - refresh asincrono
+- cache persistente dell'ultimo calendario valido per sorgente
+- avvio con dati salvati prima del refresh di rete
+- mantenimento degli ultimi dati reali se un refresh fallisce
 - filtri indipendenti per data, area e impatto
 - conversione del fuso orario
 - ordinamento e riordino persistente delle colonne
@@ -77,6 +83,10 @@ Non viene avviato alcun server HTTP locale e non è richiesto alcun browser este
 - log applicativo integrato
 - chiusura diretta con la X della finestra
 - UI contenuta nella finestra con scroll interno della tabella
+
+## Roadmap
+
+Lo sviluppo pianificato è tracciato in `ROADMAP.md`, con checklist per affidabilità, auto-refresh, persistenza UX, ricerca, notifiche ed export.
 
 ## Sviluppo e test
 
