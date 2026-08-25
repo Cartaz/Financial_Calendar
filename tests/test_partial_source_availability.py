@@ -74,10 +74,11 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
 
         assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "network"
         assert controller.get_data_origin(CalendarSource.FXSTREET) == "empty"
-        assert [event.event_name for event in controller.events_ig] == [
-            "Available source event"
-        ]
-        assert controller.events_fxstreet == []
+        assert [
+            event.event_name
+            for event in controller.filter_events(CalendarSource.FOREXFACTORY)
+        ] == ["Available source event"]
+        assert controller.filter_events(CalendarSource.FXSTREET) == []
 
         refreshed = [
             payload
