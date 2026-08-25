@@ -54,16 +54,6 @@ class AppController:
     def _source_key(source: CalendarSource) -> str:
         return source.value
 
-    def _replace_events(
-        self,
-        source: CalendarSource,
-        events: Iterable[CalendarEvent],
-    ) -> None:
-        """Replace one canonical source snapshot atomically."""
-        snapshot = tuple(events)
-        with self._data_lock:
-            self._events_by_source[self._source_key(source)] = snapshot
-
     def _replace_source_state(
         self,
         source: CalendarSource,

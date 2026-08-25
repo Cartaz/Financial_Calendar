@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication
 from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
+from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from ui.bridge import CalendarBridge
 from ui.runtime import CalendarRuntime
@@ -65,9 +66,14 @@ def test_initial_state_exposes_sources_and_persisted_filters(monkeypatch, tmp_pa
 
 def test_bridge_filters_serializes_and_annotates_controller_events(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
+    event = _future_event()
+    assert CalendarCache().save(
+        CalendarSource.FOREXFACTORY,
+        [event],
+        datetime.now(timezone.utc).isoformat(),
+    )
     settings = Settings()
     controller = AppController(settings)
-    controller._replace_events(CalendarSource.FOREXFACTORY, [_future_event()])
     bridge, _ = _bridge(controller, settings)
     try:
         rows = bridge.getEvents("ig", "USA", "HIGH", "", 2.0)
