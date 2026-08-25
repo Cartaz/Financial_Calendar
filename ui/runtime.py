@@ -10,7 +10,7 @@ from config.settings import Settings
 from core.app_controller import AppController
 from core.models import CalendarSource
 from core.notification_policy import NotificationPolicy
-from core.notifications import DesktopNotifier
+from ui.desktop_notifications import DesktopNotifier
 
 logger = logging.getLogger(__name__)
 
