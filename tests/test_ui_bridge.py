@@ -67,7 +67,7 @@ def test_bridge_filters_serializes_and_annotates_controller_events(monkeypatch, 
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     controller = AppController(settings)
-    controller.events_ig = [_future_event()]
+    controller._replace_events(CalendarSource.FOREXFACTORY, [_future_event()])
     bridge, _ = _bridge(controller, settings)
     try:
         rows = bridge.getEvents("ig", "USA", "HIGH", "", 2.0)
