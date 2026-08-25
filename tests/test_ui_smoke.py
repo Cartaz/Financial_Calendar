@@ -51,36 +51,25 @@ def test_webengine_frontend_loads_offscreen(monkeypatch, tmp_path) -> None:
         """
         JSON.stringify((() => {
           try {
-            const baseEvent = {
-              country: 'USA',
-              utc_dt: '2026-08-21T12:30:00Z',
-            };
             return {
               search: Boolean(document.getElementById('event-search')),
               quickButtons: document.querySelectorAll('[data-quick-range]').length,
-              navigationState: typeof state !== 'undefined' && Boolean(state.navigation),
-              navigationFunction: typeof navigationFilteredEvents === 'function',
-              fixedOffsetDate: isoDateInTimezone(
+              navigationModule: typeof FinancialCalendarNavigation !== 'undefined',
+              navigationFunction: typeof FinancialCalendarNavigation?.filterEvents === 'function',
+              fixedOffsetDate: FinancialCalendarNavigation.isoDateInTimezone(
                 new Date('2026-03-29T23:30:00Z'),
                 'UTC+02:00'
               ),
-              nextDay: addCalendarDays('2026-03-29', 1),
-              countdown: formatCountdown(90 * 60 * 1000),
+              nextDay: FinancialCalendarNavigation.addCalendarDays('2026-03-29', 1),
+              countdown: FinancialCalendarNavigation.formatCountdown(90 * 60 * 1000),
               combinedTab: Boolean(document.querySelector('[data-source="combined"]')),
               notificationLead: Boolean(document.getElementById('notification-lead')),
               exportButtons: ['export-csv', 'export-ics'].filter(
                 (id) => Boolean(document.getElementById(id))
               ).length,
-              operationsState: Boolean(state.operations),
-              duplicateFunction: typeof eventsProbablyDuplicate === 'function',
-              duplicatePositive: eventsProbablyDuplicate(
-                { ...baseEvent, source: 'ig', event_name: 'US Nonfarm Payrolls' },
-                { ...baseEvent, source: 'fxstreet', event_name: 'Nonfarm Payrolls' }
-              ),
-              duplicateNegative: eventsProbablyDuplicate(
-                { ...baseEvent, source: 'ig', event_name: 'CPI' },
-                { ...baseEvent, source: 'fxstreet', event_name: 'Core CPI' }
-              ),
+              operationsModule: typeof FinancialCalendarOperations !== 'undefined',
+              duplicateGroup: FinancialCalendarOperations.duplicateGroup({ duplicate_group: 'D1' }),
+              appOwnsRender: typeof renderBody === 'function',
             };
           } catch (error) {
             return { probe_error: String(error) };
@@ -105,7 +94,7 @@ def test_webengine_frontend_loads_offscreen(monkeypatch, tmp_path) -> None:
         assert "probe_error" not in runtime[-1], runtime[-1].get("probe_error")
         assert runtime[-1]["search"] is True
         assert runtime[-1]["quickButtons"] == 4
-        assert runtime[-1]["navigationState"] is True
+        assert runtime[-1]["navigationModule"] is True
         assert runtime[-1]["navigationFunction"] is True
         assert runtime[-1]["fixedOffsetDate"] == "2026-03-30"
         assert runtime[-1]["nextDay"] == "2026-03-30"
@@ -113,10 +102,9 @@ def test_webengine_frontend_loads_offscreen(monkeypatch, tmp_path) -> None:
         assert runtime[-1]["combinedTab"] is True
         assert runtime[-1]["notificationLead"] is True
         assert runtime[-1]["exportButtons"] == 2
-        assert runtime[-1]["operationsState"] is True
-        assert runtime[-1]["duplicateFunction"] is True
-        assert runtime[-1]["duplicatePositive"] is True
-        assert runtime[-1]["duplicateNegative"] is False
+        assert runtime[-1]["operationsModule"] is True
+        assert runtime[-1]["duplicateGroup"] == "D1"
+        assert runtime[-1]["appOwnsRender"] is True
     finally:
         window.close()
         app.processEvents()
