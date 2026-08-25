@@ -6,7 +6,7 @@ import logging
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone, tzinfo
-from typing import Callable
+from typing import Callable, Iterable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config.constants import CalendarDefaults
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class AppController:
-    """Coordinate scrapers, persisted state and UI notifications."""
+    """Coordinate scrapers, canonical calendar state and persisted metadata."""
 
     def __init__(
         self,
@@ -29,8 +29,10 @@ class AppController:
         debug: bool = False,
     ) -> None:
         self.settings = settings or Settings()
-        self.events_ig: list[CalendarEvent] = []
-        self.events_fxstreet: list[CalendarEvent] = []
+        self._events_by_source: dict[str, tuple[CalendarEvent, ...]] = {
+            CalendarSource.FOREXFACTORY.value: (),
+            CalendarSource.FXSTREET.value: (),
+        }
 
         self._debug = debug
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="scraper")
@@ -48,19 +50,47 @@ class AppController:
         self._data_timestamp: dict[str, str] = {"ig": "", "fxstreet": ""}
         self._load_cached_events()
 
+    @staticmethod
+    def _source_key(source: CalendarSource) -> str:
+        return source.value
+
+    def _replace_events(
+        self,
+        source: CalendarSource,
+        events: Iterable[CalendarEvent],
+    ) -> None:
+        """Replace one canonical source snapshot atomically."""
+        snapshot = tuple(events)
+        with self._data_lock:
+            self._events_by_source[self._source_key(source)] = snapshot
+
+    def _replace_source_state(
+        self,
+        source: CalendarSource,
+        events: Iterable[CalendarEvent],
+        *,
+        origin: str,
+        timestamp: str,
+    ) -> None:
+        """Atomically replace one source snapshot and its freshness metadata."""
+        snapshot = tuple(events)
+        source_key = self._source_key(source)
+        with self._data_lock:
+            self._events_by_source[source_key] = snapshot
+            self._data_origin[source_key] = origin
+            self._data_timestamp[source_key] = timestamp
+
     def _load_cached_events(self) -> None:
         for source in (CalendarSource.FOREXFACTORY, CalendarSource.FXSTREET):
             snapshot = self._cache.load(source)
             if snapshot is None:
                 continue
-
-            with self._data_lock:
-                if source == CalendarSource.FXSTREET:
-                    self.events_fxstreet = list(snapshot.events)
-                else:
-                    self.events_ig = list(snapshot.events)
-                self._data_origin[source.value] = "cache"
-                self._data_timestamp[source.value] = snapshot.refreshed_at
+            self._replace_source_state(
+                source,
+                snapshot.events,
+                origin="cache",
+                timestamp=snapshot.refreshed_at,
+            )
 
     def set_notification_callback(
         self,
@@ -176,16 +206,17 @@ class AppController:
             return
 
         refreshed_at = datetime.now(timezone.utc).isoformat()
-
-        with self._data_lock:
-            if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY):
-                self.events_ig = list(events)
-                refresh_key = "last_refresh_ig"
-            else:
-                self.events_fxstreet = list(events)
-                refresh_key = "last_refresh_fxstreet"
-            self._data_origin[source_key] = "network"
-            self._data_timestamp[source_key] = refreshed_at
+        self._replace_source_state(
+            source,
+            events,
+            origin="network",
+            timestamp=refreshed_at,
+        )
+        refresh_key = (
+            "last_refresh_ig"
+            if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY)
+            else "last_refresh_fxstreet"
+        )
 
         if not self._cache.save(source, list(events), refreshed_at):
             logger.warning("%s: impossibile aggiornare la cache persistente", source_key)
@@ -214,12 +245,7 @@ class AppController:
         timezone_name: str = "",
     ) -> list[CalendarEvent]:
         with self._data_lock:
-            source_events = (
-                self.events_ig
-                if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY)
-                else self.events_fxstreet
-            )
-            events = list(source_events)
+            events = list(self._events_by_source[self._source_key(source)])
 
         events = self._filter_past_events(events)
         if timezone_name:
