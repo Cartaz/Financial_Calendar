@@ -84,8 +84,9 @@ class CalendarWindow(QMainWindow):
         self.page.setWebChannel(self.channel)
 
         ui_dir = Path(__file__).resolve().parent
-        frontend = ui_dir / "index.html"
-        viewport_css = ui_dir / "viewport.css"
+        web_dir = ui_dir / "web"
+        frontend = web_dir / "index.html"
+        viewport_css = web_dir / "viewport.css"
         if not frontend.exists():
             raise RuntimeError(f"Frontend HTML non trovato: {frontend}")
         if not viewport_css.exists():
