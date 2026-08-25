@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
+from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from ui.bridge import CalendarBridge
 from ui.runtime import CalendarRuntime
@@ -39,10 +40,14 @@ def test_export_uses_backend_values_and_visible_presentation_time(monkeypatch, t
         utc_dt=event_dt.isoformat(),
         source=CalendarSource.FOREXFACTORY,
     )
+    assert CalendarCache().save(
+        CalendarSource.FOREXFACTORY,
+        [event],
+        datetime.now(timezone.utc).isoformat(),
+    )
 
     settings = Settings()
     controller = AppController(settings)
-    controller._replace_events(CalendarSource.FOREXFACTORY, [event])
     runtime = CalendarRuntime(controller, settings)
     native = CapturingNativeActions()
     bridge = CalendarBridge(controller, settings, runtime, native_actions=native)
