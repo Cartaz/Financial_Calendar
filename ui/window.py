@@ -7,9 +7,9 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, Qt, QUrl
-from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWebChannel import QWebChannel
-from PySide6.QtWebEngineCore import QWebEngineScript, QWebEngineSettings
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineScript, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QApplication, QMainWindow
 
@@ -20,6 +20,22 @@ from ui.bridge import CalendarBridge
 from ui.runtime import CalendarRuntime
 
 logger = logging.getLogger(__name__)
+
+
+class LocalOnlyPage(QWebEnginePage):
+    """Keep application navigation local and hand external links to the desktop."""
+
+    def acceptNavigationRequest(
+        self,
+        url: QUrl,
+        navigation_type: QWebEnginePage.NavigationType,
+        is_main_frame: bool,
+    ) -> bool:
+        del navigation_type, is_main_frame
+        if url.scheme().lower() in {"http", "https"}:
+            QDesktopServices.openUrl(url)
+            return False
+        return url.scheme().lower() in {"", "file", "qrc", "data", "about"}
 
 
 class CalendarWindow(QMainWindow):
@@ -46,10 +62,12 @@ class CalendarWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(icon_path)))
 
         self.view = QWebEngineView(self)
+        self.page = LocalOnlyPage(self.view)
+        self.view.setPage(self.page)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self.setCentralWidget(self.view)
 
-        page_settings = self.view.settings()
+        page_settings = self.page.settings()
         page_settings.setAttribute(
             QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls,
             False,
@@ -61,9 +79,9 @@ class CalendarWindow(QMainWindow):
 
         self.runtime = CalendarRuntime(controller, settings)
         self.bridge = CalendarBridge(controller, settings, self.runtime, debug=debug)
-        self.channel = QWebChannel(self.view.page())
+        self.channel = QWebChannel(self.page)
         self.channel.registerObject("bridge", self.bridge)
-        self.view.page().setWebChannel(self.channel)
+        self.page.setWebChannel(self.channel)
 
         ui_dir = Path(__file__).resolve().parent
         frontend = ui_dir / "index.html"
@@ -114,7 +132,7 @@ class CalendarWindow(QMainWindow):
         script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
         script.setRunsOnSubFrames(False)
         script.setSourceCode(source)
-        self.view.page().scripts().insert(script)
+        self.page.scripts().insert(script)
 
     def _add_shortcut(self, sequence: str, callback) -> None:
         shortcut = QShortcut(QKeySequence(sequence), self)
