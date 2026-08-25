@@ -42,7 +42,7 @@ def test_export_uses_backend_values_and_visible_presentation_time(monkeypatch, t
 
     settings = Settings()
     controller = AppController(settings)
-    controller.events_ig = [event]
+    controller._replace_events(CalendarSource.FOREXFACTORY, [event])
     runtime = CalendarRuntime(controller, settings)
     native = CapturingNativeActions()
     bridge = CalendarBridge(controller, settings, runtime, native_actions=native)
