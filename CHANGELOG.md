@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.1] - 2026-08-25
+
+Release di manutenzione strategica successiva alla chiusura della roadmap 1.0.
+
+### Architettura
+- stato operativo reso canonico e privato al controller tramite snapshot immutabili per sorgente;
+- query combinate, matching dei probabili duplicati e policy notifiche consolidati in moduli Python dedicati;
+- `CalendarBridge` riportato al ruolo di adattatore QWebChannel, senza ownership di timer o regole di dominio;
+- rimosso l'EventBus globale e sostituito il flusso controller→UI con dipendenze esplicite;
+- presentation HTML/CSS/JavaScript confinata in `ui/web/`, senza monkey patching o duplicate detection nel frontend;
+- integrazioni native Qt/D-Bus e file dialog separate dal core.
+
+### Affidabilità e sicurezza
+- export risolto contro i dati canonici Python, accettando dal frontend solo identità e data/ora di presentazione validate;
+- WebEngine reso local-only, con navigazioni HTTP(S) inoltrate al browser di sistema;
+- `install.sh` rafforzato con verifica Python 3.12+, riparazione della `.venv` e controllo degli import critici;
+- test riallineati alle interfacce pubbliche e aggiunta copertura per matching, notification policy ed export boundary.
+
+### Manutenzione
+- rimossa duplicazione e dead code residuo emersi dal secondo audit strategico;
+- nessuna nuova feature o modifica intenzionale al comportamento utente della release 1.0.0.
+
 ## [1.0.0] - 2026-08-21
 
 Prima release pubblica stabile di Financial Calendar.
