@@ -89,7 +89,6 @@ class CalendarBridge(QObject):
         self._controller.set_notification_callback(self._receive_controller_event)
 
     def _receive_controller_event(self, event_name: str, payload: dict) -> None:
-        """Queue callbacks arriving from worker threads onto the Qt thread."""
         self._controller_event.emit(event_name, dict(payload))
 
     @Slot(str, object)
@@ -153,6 +152,17 @@ class CalendarBridge(QObject):
             "utc_dt": event.utc_dt,
             "duplicate_group": duplicate_group,
         }
+
+    def _serialize_events(
+        self,
+        source_key: str,
+        events: list[CalendarEvent],
+    ) -> list[dict[str, str]]:
+        groups = build_duplicate_groups(events) if source_key == "combined" else {}
+        return [
+            self._event_to_map(event, groups.get(event_identity(event), ""))
+            for event in events
+        ]
 
     def _source_state(self, source_key: str) -> dict:
         self._validate_source_key(source_key)
@@ -239,11 +249,7 @@ class CalendarBridge(QObject):
             tz_offset_hours=tz_offset_hours,
             timezone_name=timezone_name,
         )
-        groups = build_duplicate_groups(events) if source_key == "combined" else {}
-        return [
-            self._event_to_map(event, groups.get(event_identity(event), ""))
-            for event in events
-        ]
+        return self._serialize_events(source_key, events)
 
     @Slot(str, str, str, str, float, result="QVariantList")
     def getEvents(
@@ -371,18 +377,46 @@ class CalendarBridge(QObject):
     def refreshAll(self) -> None:
         self._controller.refresh_all()
 
-    @Slot(str, str, result="QVariantMap")
-    def exportEvents(self, export_format: str, events_json: str) -> dict:
-        """Validate the presentation snapshot and delegate native export."""
+    @Slot(str, str, str, str, result="QVariantMap")
+    def exportEvents(
+        self,
+        export_format: str,
+        source_key: str,
+        timezone_name: str,
+        identities_json: str,
+    ) -> dict:
+        """Resolve visible row identities against Python-owned state before export."""
         try:
-            raw = json.loads(events_json)
-        except json.JSONDecodeError:
+            self._validate_source_key(source_key)
+            raw = json.loads(identities_json)
+        except (ValueError, json.JSONDecodeError):
             return {"ok": False, "error": "Dati export non validi"}
-        if not isinstance(raw, list) or any(not isinstance(item, dict) for item in raw):
+        if not isinstance(raw, list) or len(raw) > 20_000:
             return {"ok": False, "error": "Dati export non validi"}
-        if len(raw) > 20_000:
-            return {"ok": False, "error": "Troppi eventi da esportare"}
-        return self._native_actions.export_events(export_format, raw)
+
+        identities: set[tuple[str, str, str, str]] = set()
+        for item in raw:
+            if not isinstance(item, dict):
+                return {"ok": False, "error": "Dati export non validi"}
+            identity = (
+                str(item.get("source", "")),
+                str(item.get("utc_dt", "")),
+                str(item.get("country", "")),
+                str(item.get("event_name", "")),
+            )
+            if not all(identity):
+                return {"ok": False, "error": "Dati export non validi"}
+            identities.add(identity)
+
+        events = self._queries.resolve_identities(
+            self._sources(source_key),
+            identities,
+            timezone_name=timezone_name,
+        )
+        if not events:
+            return {"ok": False, "error": "Nessun evento corrente da esportare"}
+        rows = self._serialize_events(source_key, events)
+        return self._native_actions.export_events(export_format, rows)
 
     @Slot()
     def start(self) -> None:
