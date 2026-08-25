@@ -46,11 +46,12 @@ def test_release_15_controls_and_assets_are_wired() -> None:
 
 
 def test_release_15_does_not_reintroduce_tray_or_external_notification_processes() -> None:
-    notifier = (ROOT / "core" / "notifications.py").read_text(encoding="utf-8")
-    bridge = (UI / "bridge.py").read_text(encoding="utf-8")
+    notifier = (UI / "desktop_notifications.py").read_text(encoding="utf-8")
+    runtime = (UI / "runtime.py").read_text(encoding="utf-8")
 
     assert "QtDBus" in notifier
     assert "org.freedesktop.Notifications" in notifier
     assert "notify-send" not in notifier
     assert "QSystemTrayIcon" not in notifier
-    assert "QSystemTrayIcon" not in bridge
+    assert "from ui.desktop_notifications import DesktopNotifier" in runtime
+    assert not (ROOT / "core" / "notifications.py").exists()
