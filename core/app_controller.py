@@ -12,7 +12,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from config.constants import CalendarDefaults
 from config.settings import Settings
 from core.cache import CalendarCache
-from core.event_bus import EventBus
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_fxstreet import scrape_fxstreet_calendar
 from core.scraper_ig import scrape_ig_calendar
@@ -29,7 +28,6 @@ class AppController:
         *,
         debug: bool = False,
     ) -> None:
-        self._bus = EventBus()
         self.settings = settings or Settings()
         self.events_ig: list[CalendarEvent] = []
         self.events_fxstreet: list[CalendarEvent] = []
@@ -78,11 +76,6 @@ class AppController:
             callback = self._notification_callback
         if callback is not None:
             callback(event_name, payload)
-        else:
-            self._bus.emit(event_name, payload)
-
-    def subscribe(self, event: str, handler: Callable) -> None:
-        self._bus.subscribe(event, handler)
 
     def is_refreshing(self, source: CalendarSource) -> bool:
         event = (
