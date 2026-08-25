@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication
 from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
+from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from ui.bridge import CalendarBridge
 from ui.runtime import CalendarRuntime
@@ -44,18 +45,26 @@ def _event(source: CalendarSource, name: str, *, minutes: int = 4) -> CalendarEv
     )
 
 
+def _seed(source: CalendarSource, events: list[CalendarEvent]) -> None:
+    assert CalendarCache().save(
+        source,
+        events,
+        datetime.now(timezone.utc).isoformat(),
+    )
+
+
 def test_combined_source_merges_and_annotates_real_events(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
-    settings = Settings()
-    controller = AppController(settings)
-    controller._replace_events(
+    _seed(
         CalendarSource.FOREXFACTORY,
         [_event(CalendarSource.FOREXFACTORY, "Nonfarm Payrolls", minutes=60)],
     )
-    controller._replace_events(
+    _seed(
         CalendarSource.FXSTREET,
         [_event(CalendarSource.FXSTREET, "US Nonfarm Payrolls", minutes=60)],
     )
+    settings = Settings()
+    controller = AppController(settings)
     runtime = CalendarRuntime(controller, settings, notifier=FakeNotifier())
     bridge = CalendarBridge(controller, settings, runtime)
     try:
@@ -81,16 +90,16 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(monkeyp
     app = QApplication.instance() or QApplication([])
     assert app is not None
 
-    settings = Settings()
-    controller = AppController(settings)
-    controller._replace_events(
+    _seed(
         CalendarSource.FOREXFACTORY,
         [_event(CalendarSource.FOREXFACTORY, "US Nonfarm Payrolls")],
     )
-    controller._replace_events(
+    _seed(
         CalendarSource.FXSTREET,
         [_event(CalendarSource.FXSTREET, "Nonfarm Payrolls")],
     )
+    settings = Settings()
+    controller = AppController(settings)
     controller.refresh_all = lambda: None
     notifier = FakeNotifier()
     runtime = CalendarRuntime(controller, settings, notifier=notifier)
