@@ -56,6 +56,16 @@ def _display_refresh_timestamp(value: str) -> str:
     return parsed.astimezone().strftime("%d/%m/%Y %H:%M:%S")
 
 
+def _validated_display_datetime(item: dict) -> tuple[str, str] | None:
+    date_text = str(item.get("date", ""))
+    time_text = str(item.get("time", ""))
+    try:
+        datetime.strptime(f"{date_text} {time_text}", "%d/%m/%Y %H:%M")
+    except ValueError:
+        return None
+    return date_text, time_text
+
+
 class CalendarBridge(QObject):
     """Expose a deliberately small presentation API to JavaScript."""
 
@@ -305,7 +315,7 @@ class CalendarBridge(QObject):
 
     @Slot(str, str, result="QVariantMap")
     def exportEvents(self, export_format: str, events_json: str) -> dict:
-        """Resolve visible identities against current Python-owned state before export."""
+        """Export backend-owned values with validated presentation date/time."""
         try:
             raw = json.loads(events_json)
         except json.JSONDecodeError:
@@ -314,6 +324,7 @@ class CalendarBridge(QObject):
             return {"ok": False, "error": "Dati export non validi"}
 
         identities: set[tuple[str, str, str, str]] = set()
+        display_datetime: dict[tuple[str, str, str, str], tuple[str, str]] = {}
         for item in raw:
             if not isinstance(item, dict):
                 return {"ok": False, "error": "Dati export non validi"}
@@ -326,22 +337,31 @@ class CalendarBridge(QObject):
             if not all(identity):
                 return {"ok": False, "error": "Dati export non validi"}
             identities.add(identity)
+            display_value = _validated_display_datetime(item)
+            if display_value is not None:
+                display_datetime[identity] = display_value
 
         source_key = self._validate_source_key(str(self._settings.get("active_source")))
-        timezone_name = str(self._settings.get("timezone_name"))
-        if timezone_name == "local":
-            timezone_name = "UTC"
         events = self._queries.resolve_identities(
             self._sources(source_key),
             identities,
-            timezone_name=timezone_name,
+            timezone_name="UTC",
         )
         if not events:
             return {"ok": False, "error": "Nessun evento corrente da esportare"}
-        return self._native_actions.export_events(
-            export_format,
-            self._serialize_events(source_key, events),
-        )
+
+        rows = self._serialize_events(source_key, events)
+        for row in rows:
+            identity = (
+                row["source"],
+                row["utc_dt"],
+                row["country"],
+                row["event_name"],
+            )
+            display_value = display_datetime.get(identity)
+            if display_value is not None:
+                row["date"], row["time"] = display_value
+        return self._native_actions.export_events(export_format, rows)
 
     @Slot()
     def start(self) -> None:
