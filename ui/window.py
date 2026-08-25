@@ -17,6 +17,7 @@ from config.constants import AppMeta, PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from ui.bridge import CalendarBridge
+from ui.runtime import CalendarRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,8 @@ class CalendarWindow(QMainWindow):
             False,
         )
 
-        self.bridge = CalendarBridge(controller, settings, debug=debug)
+        self.runtime = CalendarRuntime(controller, settings)
+        self.bridge = CalendarBridge(controller, settings, self.runtime, debug=debug)
         self.channel = QWebChannel(self.view.page())
         self.channel.registerObject("bridge", self.bridge)
         self.view.page().setWebChannel(self.channel)
