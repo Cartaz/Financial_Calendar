@@ -5,13 +5,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 UI = ROOT / "ui"
+WEB = UI / "web"
 
 
 def test_release_15_controls_and_assets_are_wired() -> None:
-    html = (UI / "index.html").read_text(encoding="utf-8")
-    app = (UI / "app.js").read_text(encoding="utf-8")
-    operations = (UI / "operations.js").read_text(encoding="utf-8")
-    css = (UI / "operations.css").read_text(encoding="utf-8")
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    app = (WEB / "app.js").read_text(encoding="utf-8")
+    operations = (WEB / "operations.js").read_text(encoding="utf-8")
+    css = (WEB / "operations.css").read_text(encoding="utf-8")
     bridge = (UI / "bridge.py").read_text(encoding="utf-8")
     matching = (ROOT / "core" / "event_matching.py").read_text(encoding="utf-8")
 
@@ -19,8 +20,8 @@ def test_release_15_controls_and_assets_are_wired() -> None:
     assert 'id="notification-lead"' in html
     assert 'id="export-csv"' in html
     assert 'id="export-ics"' in html
-    assert 'href="operations.css"' in html
-    assert 'src="operations.js"' in html
+    assert 'href="web/operations.css"' in html
+    assert 'src="web/operations.js"' in html
 
     assert "eventsProbablyDuplicate" not in operations
     assert "bigramDice" not in operations
