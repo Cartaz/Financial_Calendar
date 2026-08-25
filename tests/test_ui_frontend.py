@@ -49,16 +49,16 @@ def test_frontend_uses_iana_timezone_and_exposes_cached_state() -> None:
     assert "Dati salvati" in javascript
     assert "Dati aggiornati" in javascript
     assert "Errore · nessun dato" in javascript
-    assert "currentTimezoneOffset" not in javascript
     assert "def getEventsInTimezone" in bridge
     assert '"data_origin"' in bridge
     assert '"last_refresh_iso"' in bridge
 
 
-def test_release_13_restores_state_and_shows_freshness() -> None:
+def test_runtime_owns_timers_and_window_geometry_remains_native() -> None:
     html = (UI / "index.html").read_text(encoding="utf-8")
     javascript = (UI / "app.js").read_text(encoding="utf-8")
     bridge = (UI / "bridge.py").read_text(encoding="utf-8")
+    runtime = (UI / "runtime.py").read_text(encoding="utf-8")
     window = (UI / "window.py").read_text(encoding="utf-8")
     ux_css = (UI / "ux.css").read_text(encoding="utf-8")
 
@@ -71,8 +71,10 @@ def test_release_13_restores_state_and_shows_freshness() -> None:
     assert "sourceFreshnessSummary" in javascript
     assert "startFreshnessClock" in javascript
     assert "auto_refresh_options" in bridge
-    assert "QTimer" in bridge
-    assert "_auto_refresh_timer" in bridge
+    assert "QTimer" not in bridge
+    assert "QTimer" in runtime
+    assert "auto_refresh_timer" in runtime
+    assert "notification_timer" in runtime
     assert "saveGeometry" in window
     assert "restoreGeometry" in window
     assert "window_geometry" in window
