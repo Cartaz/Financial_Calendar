@@ -48,8 +48,14 @@ def test_combined_source_merges_and_annotates_real_events(monkeypatch, tmp_path)
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     controller = AppController(settings)
-    controller.events_ig = [_event(CalendarSource.FOREXFACTORY, "Nonfarm Payrolls", minutes=60)]
-    controller.events_fxstreet = [_event(CalendarSource.FXSTREET, "US Nonfarm Payrolls", minutes=60)]
+    controller._replace_events(
+        CalendarSource.FOREXFACTORY,
+        [_event(CalendarSource.FOREXFACTORY, "Nonfarm Payrolls", minutes=60)],
+    )
+    controller._replace_events(
+        CalendarSource.FXSTREET,
+        [_event(CalendarSource.FXSTREET, "US Nonfarm Payrolls", minutes=60)],
+    )
     runtime = CalendarRuntime(controller, settings, notifier=FakeNotifier())
     bridge = CalendarBridge(controller, settings, runtime)
     try:
@@ -77,8 +83,14 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(monkeyp
 
     settings = Settings()
     controller = AppController(settings)
-    controller.events_ig = [_event(CalendarSource.FOREXFACTORY, "US Nonfarm Payrolls")]
-    controller.events_fxstreet = [_event(CalendarSource.FXSTREET, "Nonfarm Payrolls")]
+    controller._replace_events(
+        CalendarSource.FOREXFACTORY,
+        [_event(CalendarSource.FOREXFACTORY, "US Nonfarm Payrolls")],
+    )
+    controller._replace_events(
+        CalendarSource.FXSTREET,
+        [_event(CalendarSource.FXSTREET, "Nonfarm Payrolls")],
+    )
     controller.refresh_all = lambda: None
     notifier = FakeNotifier()
     runtime = CalendarRuntime(controller, settings, notifier=notifier)
