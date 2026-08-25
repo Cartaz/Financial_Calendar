@@ -2,7 +2,7 @@
 
 Applicazione desktop Python per i calendari economici **ForexFactory/Faireconomy** e **FXStreet**, con interfaccia HTML/CSS/JavaScript locale ospitata in Qt WebEngine.
 
-**Release stabile: 1.0.0**
+**Release stabile: 1.0.1**
 
 La UI usa superfici `#141414` e `#FF6600` come unico colore accent.
 
@@ -113,7 +113,7 @@ Non viene avviato alcun server HTTP locale. Il contenuto WebEngine locale non pu
 
 ## Release
 
-La cronologia delle release pubbliche è mantenuta in `CHANGELOG.md`. La release `v1.0.0` rappresenta la prima versione pubblica stabile del progetto.
+La cronologia delle release pubbliche è mantenuta in `CHANGELOG.md`. La release stabile corrente è `v1.0.1`, una release di manutenzione strategica che conserva le funzionalità della roadmap 1.0 e ne consolida architettura, ownership e confini.
 
 ## Sviluppo e test
 
