@@ -26,7 +26,6 @@ _SOURCE_BY_KEY: dict[str, CalendarSource] = {
 }
 _SOURCE_KEYS = {"ig", "fxstreet", "combined"}
 _PREFIX_BY_KEY = {"ig": "ig", "fxstreet": "fxstreet", "combined": "combined"}
-
 _COLUMN_KEYS: dict[str, list[str]] = {
     "ig": ["date", "time", "country", "impact", "event_name", "actual", "forecast", "previous"],
     "fxstreet": [
@@ -62,7 +61,6 @@ class CalendarBridge(QObject):
 
     backendEvent = Signal(str, "QVariantMap")
     logMessage = Signal("QVariantMap")
-
     _controller_event = Signal(str, object)
     _log_event = Signal(object)
 
@@ -83,7 +81,6 @@ class CalendarBridge(QObject):
         self._native_actions = native_actions or NativeActions()
         self._debug = debug
         self._logs: deque[dict[str, str]] = deque(maxlen=250)
-
         self._controller_event.connect(self._forward_controller_event)
         self._log_event.connect(self._forward_log_event)
         self._controller.set_notification_callback(self._receive_controller_event)
@@ -153,16 +150,9 @@ class CalendarBridge(QObject):
             "duplicate_group": duplicate_group,
         }
 
-    def _serialize_events(
-        self,
-        source_key: str,
-        events: list[CalendarEvent],
-    ) -> list[dict[str, str]]:
+    def _serialize_events(self, source_key: str, events: list[CalendarEvent]) -> list[dict[str, str]]:
         groups = build_duplicate_groups(events) if source_key == "combined" else {}
-        return [
-            self._event_to_map(event, groups.get(event_identity(event), ""))
-            for event in events
-        ]
+        return [self._event_to_map(event, groups.get(event_identity(event), "")) for event in events]
 
     def _source_state(self, source_key: str) -> dict:
         self._validate_source_key(source_key)
@@ -177,19 +167,10 @@ class CalendarBridge(QObject):
             origin = self._controller.get_data_origin(source)
             refreshing = self._controller.is_refreshing(source)
             name = "ForexFactory" if source_key == "ig" else "FXStreet"
-            description = (
-                "Feed Faireconomy / ForexFactory"
-                if source_key == "ig"
-                else "Calendario economico FXStreet"
-            )
-
+            description = "Feed Faireconomy / ForexFactory" if source_key == "ig" else "Calendario economico FXStreet"
         columns = [
             {"key": key, "label": label}
-            for key, label in zip(
-                _COLUMN_KEYS[source_key],
-                _COLUMN_LABELS[source_key],
-                strict=True,
-            )
+            for key, label in zip(_COLUMN_KEYS[source_key], _COLUMN_LABELS[source_key], strict=True)
         ]
         return {
             "key": source_key,
@@ -210,11 +191,7 @@ class CalendarBridge(QObject):
     @Slot(result="QVariantMap")
     def getInitialState(self) -> dict:
         return {
-            "app": {
-                "name": AppMeta.DISPLAY_NAME,
-                "version": AppMeta.VERSION,
-                "description": AppMeta.DESCRIPTION,
-            },
+            "app": {"name": AppMeta.DISPLAY_NAME, "version": AppMeta.VERSION, "description": AppMeta.DESCRIPTION},
             "sources": [self._source_state(key) for key in ("ig", "fxstreet", "combined")],
             "regions": list(CalendarDefaults.REGIONS),
             "impacts": ["ALL", *CalendarDefaults.IMPACT_LEVELS],
@@ -252,52 +229,19 @@ class CalendarBridge(QObject):
         return self._serialize_events(source_key, events)
 
     @Slot(str, str, str, str, float, result="QVariantList")
-    def getEvents(
-        self,
-        source_key: str,
-        region: str,
-        impact: str,
-        date: str,
-        tz_offset_hours: float,
-    ) -> list[dict[str, str]]:
-        return self._query_maps(
-            source_key,
-            region,
-            impact,
-            date,
-            tz_offset_hours=tz_offset_hours,
-        )
+    def getEvents(self, source_key: str, region: str, impact: str, date: str, tz_offset_hours: float) -> list[dict[str, str]]:
+        return self._query_maps(source_key, region, impact, date, tz_offset_hours=tz_offset_hours)
 
     @Slot(str, str, str, str, str, result="QVariantList")
-    def getEventsInTimezone(
-        self,
-        source_key: str,
-        region: str,
-        impact: str,
-        date: str,
-        timezone_name: str,
-    ) -> list[dict[str, str]]:
-        return self._query_maps(
-            source_key,
-            region,
-            impact,
-            date,
-            timezone_name=timezone_name,
-        )
+    def getEventsInTimezone(self, source_key: str, region: str, impact: str, date: str, timezone_name: str) -> list[dict[str, str]]:
+        return self._query_maps(source_key, region, impact, date, timezone_name=timezone_name)
 
     @Slot(str, str, str, result=bool)
     def saveFilters(self, source_key: str, region: str, impact: str) -> bool:
         self._validate_source_key(source_key)
         prefix = _PREFIX_BY_KEY[source_key]
         try:
-            return bool(
-                self._settings.set_many(
-                    {
-                        f"{prefix}_selected_region": region,
-                        f"{prefix}_selected_impact": impact,
-                    }
-                )
-            )
+            return bool(self._settings.set_many({f"{prefix}_selected_region": region, f"{prefix}_selected_impact": impact}))
         except (TypeError, ValueError):
             return False
 
@@ -306,11 +250,8 @@ class CalendarBridge(QObject):
         self._validate_source_key(source_key)
         try:
             order = json.loads(order_json)
-        except json.JSONDecodeError:
-            return False
-        try:
             return bool(self._settings.set(f"{_PREFIX_BY_KEY[source_key]}_column_order", order))
-        except (TypeError, ValueError):
+        except (json.JSONDecodeError, TypeError, ValueError):
             return False
 
     @Slot(str, str, str, result=bool)
@@ -318,34 +259,19 @@ class CalendarBridge(QObject):
         self._validate_source_key(source_key)
         prefix = _PREFIX_BY_KEY[source_key]
         try:
-            return bool(
-                self._settings.set_many(
-                    {
-                        f"{prefix}_sort_key": sort_key,
-                        f"{prefix}_sort_direction": direction,
-                    }
-                )
-            )
+            return bool(self._settings.set_many({f"{prefix}_sort_key": sort_key, f"{prefix}_sort_direction": direction}))
         except (TypeError, ValueError):
             return False
 
     @Slot(str, str, str, int, result=bool)
-    def saveUiState(
-        self,
-        active_source: str,
-        timezone_name: str,
-        selected_date: str,
-        auto_refresh_minutes: int,
-    ) -> bool:
+    def saveUiState(self, active_source: str, timezone_name: str, selected_date: str, auto_refresh_minutes: int) -> bool:
         try:
-            saved = self._settings.set_many(
-                {
-                    "active_source": active_source,
-                    "timezone_name": timezone_name,
-                    "selected_date": selected_date,
-                    "auto_refresh_minutes": auto_refresh_minutes,
-                }
-            )
+            saved = self._settings.set_many({
+                "active_source": active_source,
+                "timezone_name": timezone_name,
+                "selected_date": selected_date,
+                "auto_refresh_minutes": auto_refresh_minutes,
+            })
         except (TypeError, ValueError):
             return False
         if saved:
@@ -377,19 +303,12 @@ class CalendarBridge(QObject):
     def refreshAll(self) -> None:
         self._controller.refresh_all()
 
-    @Slot(str, str, str, str, result="QVariantMap")
-    def exportEvents(
-        self,
-        export_format: str,
-        source_key: str,
-        timezone_name: str,
-        identities_json: str,
-    ) -> dict:
-        """Resolve visible row identities against Python-owned state before export."""
+    @Slot(str, str, result="QVariantMap")
+    def exportEvents(self, export_format: str, events_json: str) -> dict:
+        """Resolve visible identities against current Python-owned state before export."""
         try:
-            self._validate_source_key(source_key)
-            raw = json.loads(identities_json)
-        except (ValueError, json.JSONDecodeError):
+            raw = json.loads(events_json)
+        except json.JSONDecodeError:
             return {"ok": False, "error": "Dati export non validi"}
         if not isinstance(raw, list) or len(raw) > 20_000:
             return {"ok": False, "error": "Dati export non validi"}
@@ -408,6 +327,10 @@ class CalendarBridge(QObject):
                 return {"ok": False, "error": "Dati export non validi"}
             identities.add(identity)
 
+        source_key = self._validate_source_key(str(self._settings.get("active_source")))
+        timezone_name = str(self._settings.get("timezone_name"))
+        if timezone_name == "local":
+            timezone_name = "UTC"
         events = self._queries.resolve_identities(
             self._sources(source_key),
             identities,
@@ -415,8 +338,10 @@ class CalendarBridge(QObject):
         )
         if not events:
             return {"ok": False, "error": "Nessun evento corrente da esportare"}
-        rows = self._serialize_events(source_key, events)
-        return self._native_actions.export_events(export_format, rows)
+        return self._native_actions.export_events(
+            export_format,
+            self._serialize_events(source_key, events),
+        )
 
     @Slot()
     def start(self) -> None:
