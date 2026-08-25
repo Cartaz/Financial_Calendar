@@ -42,37 +42,3 @@ class CalendarEvent:
     utc_dt: str = ""
     deviation: str = ""
     source: CalendarSource = CalendarSource.FOREXFACTORY
-
-    def to_ig_row(self) -> list[str]:
-        """Compatibility row layout for the legacy ``ig``/ForexFactory tab."""
-        impact_map = {
-            ImpactLevel.HIGH: "ALTO",
-            ImpactLevel.MID: "MEDIO",
-            ImpactLevel.LOW: "BASSO",
-        }
-        return [
-            self.date,
-            self.time,
-            self.country,
-            impact_map.get(self.impact, "BASSO"),
-            self.event_name,
-            self.actual,
-            self.forecast,
-            self.previous,
-        ]
-
-    def to_forexfactory_row(self) -> list[str]:
-        return self.to_ig_row()
-
-    def to_fxstreet_row(self) -> list[str]:
-        return [
-            self.date,
-            self.time,
-            self.country,
-            self.event_name,
-            self.impact.value,
-            self.actual,
-            self.deviation,
-            self.forecast,
-            self.previous,
-        ]
