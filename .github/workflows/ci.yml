@@ -49,9 +49,9 @@ jobs:
 
       - name: JavaScript syntax check
         run: |
-          node --check ui/app.js
-          node --check ui/navigation.js
-          node --check ui/operations.js
+          node --check ui/web/app.js
+          node --check ui/web/navigation.js
+          node --check ui/web/operations.js
 
       - name: Test suite
         run: python -m pytest tests -q
