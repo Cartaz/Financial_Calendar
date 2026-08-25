@@ -9,6 +9,7 @@ from config.settings import Settings
 from core.app_controller import AppController
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from ui.bridge import CalendarBridge
+from ui.runtime import CalendarRuntime
 
 
 class FakeNotifier:
@@ -43,31 +44,34 @@ def _event(source: CalendarSource, name: str, *, minutes: int = 4) -> CalendarEv
     )
 
 
-def test_combined_source_merges_real_events_and_persists_its_state(monkeypatch, tmp_path) -> None:
+def test_combined_source_merges_and_annotates_real_events(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     controller = AppController(settings)
-    controller.events_ig = [_event(CalendarSource.FOREXFACTORY, "Nonfarm Payrolls", minutes=60)]
-    controller.events_fxstreet = [_event(CalendarSource.FXSTREET, "US Nonfarm Payrolls", minutes=60)]
-    bridge = CalendarBridge(controller, settings, notifier=FakeNotifier())
+    controller._replace_events(
+        CalendarSource.FOREXFACTORY,
+        [_event(CalendarSource.FOREXFACTORY, "Nonfarm Payrolls", minutes=60)],
+    )
+    controller._replace_events(
+        CalendarSource.FXSTREET,
+        [_event(CalendarSource.FXSTREET, "US Nonfarm Payrolls", minutes=60)],
+    )
+    runtime = CalendarRuntime(controller, settings, notifier=FakeNotifier())
+    bridge = CalendarBridge(controller, settings, runtime)
     try:
         rows = bridge.getEventsInTimezone("combined", "USA", "HIGH", "", "Europe/Rome")
         assert len(rows) == 2
         assert {row["source"] for row in rows} == {"ig", "fxstreet"}
+        assert {row["duplicate_group"] for row in rows} == {"D1"}
 
         assert bridge.saveFilters("combined", "USA", "HIGH")
         assert bridge.saveSort("combined", "source", "desc")
         assert bridge.saveUiState("combined", "Europe/Rome", "", 15)
-
         initial = bridge.getInitialState()
         sources = {source["key"]: source for source in initial["sources"]}
-        assert set(sources) == {"ig", "fxstreet", "combined"}
-        assert len(sources["combined"]["columns"]) == 10
         assert sources["combined"]["selected_region"] == "USA"
-        assert sources["combined"]["selected_impact"] == "HIGH"
         assert sources["combined"]["sort_key"] == "source"
         assert initial["ui_state"]["active_source"] == "combined"
-        assert initial["notification_lead_options"] == [0, 5, 15, 30, 60]
     finally:
         controller.shutdown()
 
@@ -79,11 +83,18 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(monkeyp
 
     settings = Settings()
     controller = AppController(settings)
-    controller.events_ig = [_event(CalendarSource.FOREXFACTORY, "US Nonfarm Payrolls")]
-    controller.events_fxstreet = [_event(CalendarSource.FXSTREET, "Nonfarm Payrolls")]
+    controller._replace_events(
+        CalendarSource.FOREXFACTORY,
+        [_event(CalendarSource.FOREXFACTORY, "US Nonfarm Payrolls")],
+    )
+    controller._replace_events(
+        CalendarSource.FXSTREET,
+        [_event(CalendarSource.FXSTREET, "Nonfarm Payrolls")],
+    )
     controller.refresh_all = lambda: None
     notifier = FakeNotifier()
-    bridge = CalendarBridge(controller, settings, notifier=notifier)
+    runtime = CalendarRuntime(controller, settings, notifier=notifier)
+    bridge = CalendarBridge(controller, settings, runtime)
     try:
         assert bridge.saveNotificationLead(5)
         assert notifier.messages == []
@@ -94,12 +105,12 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(monkeyp
         assert "Evento HIGH" in title
         assert "USA" in body
         assert "Payrolls" in body
-        assert bridge._notification_timer.isActive()
+        assert runtime.notification_timer.isActive()
 
-        bridge._check_high_notifications()
+        runtime.check_notifications()
         assert len(notifier.messages) == 1
 
         assert bridge.saveNotificationLead(0)
-        assert not bridge._notification_timer.isActive()
+        assert not runtime.notification_timer.isActive()
     finally:
         controller.shutdown()

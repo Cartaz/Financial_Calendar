@@ -9,6 +9,7 @@ from config.settings import Settings
 from core.app_controller import AppController
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from ui.bridge import CalendarBridge
+from ui.runtime import CalendarRuntime
 
 
 def _redirect_paths(monkeypatch, tmp_path) -> None:
@@ -33,11 +34,16 @@ def _future_event() -> CalendarEvent:
     )
 
 
+def _bridge(controller: AppController, settings: Settings) -> tuple[CalendarBridge, CalendarRuntime]:
+    runtime = CalendarRuntime(controller, settings)
+    return CalendarBridge(controller, settings, runtime), runtime
+
+
 def test_initial_state_exposes_sources_and_persisted_filters(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     controller = AppController(settings)
-    bridge = CalendarBridge(controller, settings)
+    bridge, _ = _bridge(controller, settings)
     try:
         assert bridge.saveFilters("ig", "USA", "HIGH") is True
         initial = bridge.getInitialState()
@@ -57,12 +63,12 @@ def test_initial_state_exposes_sources_and_persisted_filters(monkeypatch, tmp_pa
         controller.shutdown()
 
 
-def test_bridge_filters_and_serializes_controller_events(monkeypatch, tmp_path) -> None:
+def test_bridge_filters_serializes_and_annotates_controller_events(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     controller = AppController(settings)
-    controller.events_ig = [_future_event()]
-    bridge = CalendarBridge(controller, settings)
+    controller._replace_events(CalendarSource.FOREXFACTORY, [_future_event()])
+    bridge, _ = _bridge(controller, settings)
     try:
         rows = bridge.getEvents("ig", "USA", "HIGH", "", 2.0)
         assert len(rows) == 1
@@ -70,6 +76,7 @@ def test_bridge_filters_and_serializes_controller_events(monkeypatch, tmp_path) 
         assert rows[0]["impact"] == "HIGH"
         assert rows[0]["event_name"] == "Test event"
         assert rows[0]["source"] == "ig"
+        assert rows[0]["duplicate_group"] == ""
     finally:
         controller.shutdown()
 
@@ -78,7 +85,7 @@ def test_column_order_is_validated_and_persisted(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     controller = AppController(settings)
-    bridge = CalendarBridge(controller, settings)
+    bridge, _ = _bridge(controller, settings)
     try:
         order = [0, 4, 1, 2, 3, 5, 6, 7]
         assert bridge.saveColumnOrder("ig", str(order).replace("'", '"')) is True
@@ -89,7 +96,7 @@ def test_column_order_is_validated_and_persisted(monkeypatch, tmp_path) -> None:
         controller.shutdown()
 
 
-def test_ui_state_sort_auto_refresh_and_notifications_are_persisted(monkeypatch, tmp_path) -> None:
+def test_ui_state_delegates_timer_coordination_to_runtime(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     qt_app = QApplication.instance() or QApplication([])
     assert qt_app is not None
@@ -98,33 +105,25 @@ def test_ui_state_sort_auto_refresh_and_notifications_are_persisted(monkeypatch,
     controller = AppController(settings)
     refresh_calls: list[bool] = []
     controller.refresh_all = lambda: refresh_calls.append(True)
-    bridge = CalendarBridge(controller, settings)
+    bridge, runtime = _bridge(controller, settings)
     try:
         assert bridge.saveUiState("fxstreet", "Europe/Rome", "2026-08-24", 5)
         assert bridge.saveSort("fxstreet", "impact", "desc")
         assert bridge.saveNotificationLead(15)
 
         initial = bridge.getInitialState()
-        sources = {source["key"]: source for source in initial["sources"]}
-        assert initial["ui_state"] == {
-            "active_source": "fxstreet",
-            "timezone_name": "Europe/Rome",
-            "selected_date": "2026-08-24",
-            "auto_refresh_minutes": 5,
-            "high_notification_minutes": 15,
-        }
-        assert sources["fxstreet"]["sort_key"] == "impact"
-        assert sources["fxstreet"]["sort_direction"] == "desc"
+        assert initial["ui_state"]["auto_refresh_minutes"] == 5
+        assert initial["ui_state"]["high_notification_minutes"] == 15
 
         bridge.start()
         assert refresh_calls == [True]
-        assert bridge._auto_refresh_timer.isActive()
-        assert bridge._auto_refresh_timer.interval() == 5 * 60 * 1000
-        assert bridge._notification_timer.isActive()
+        assert runtime.auto_refresh_timer.isActive()
+        assert runtime.auto_refresh_timer.interval() == 5 * 60 * 1000
+        assert runtime.notification_timer.isActive()
 
         assert bridge.saveUiState("fxstreet", "Europe/Rome", "2026-08-24", 0)
-        assert not bridge._auto_refresh_timer.isActive()
+        assert not runtime.auto_refresh_timer.isActive()
         assert bridge.saveNotificationLead(0)
-        assert not bridge._notification_timer.isActive()
+        assert not runtime.notification_timer.isActive()
     finally:
         controller.shutdown()

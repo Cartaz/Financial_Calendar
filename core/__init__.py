@@ -1,7 +1,6 @@
 """Business/domain layer for Financial Calendar."""
 
 from core.app_controller import AppController
-from core.event_bus import EventBus
 from core.exceptions import (
     AppError,
     ConfigError,
@@ -14,7 +13,6 @@ from core.models import CalendarEvent, CalendarSource, ImpactLevel
 
 __all__ = [
     "AppController",
-    "EventBus",
     "CalendarEvent",
     "CalendarSource",
     "ImpactLevel",

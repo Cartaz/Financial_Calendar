@@ -13,6 +13,11 @@ const state = {
   requestSerial: 0,
   autoRefreshMinutes: 15,
   freshnessTimer: null,
+  navigation: {
+    searchQuery: "",
+    quickRange: "all",
+    timer: null,
+  },
 };
 
 const els = {
@@ -22,12 +27,12 @@ const els = {
   connectionState: document.getElementById("connection-state"),
   connectionLabel: document.getElementById("connection-label"),
   sourceTabs: [...document.querySelectorAll(".source-tab")],
-  filters: document.getElementById("filters"),
   date: document.getElementById("filter-date"),
   region: document.getElementById("filter-region"),
   impact: document.getElementById("filter-impact"),
   timezone: document.getElementById("filter-timezone"),
   autoRefresh: document.getElementById("auto-refresh"),
+  notificationLead: document.getElementById("notification-lead"),
   refreshSource: document.getElementById("refresh-source"),
   refreshAll: document.getElementById("refresh-all"),
   sourceKicker: document.getElementById("source-kicker"),
@@ -42,12 +47,17 @@ const els = {
   errorDetailsWrap: document.getElementById("error-details-wrap"),
   errorDetails: document.getElementById("error-details"),
   dismissError: document.getElementById("dismiss-error"),
+  eventSearch: document.getElementById("event-search"),
+  quickRangeButtons: [...document.querySelectorAll("[data-quick-range]")],
+  nextEventSummary: document.getElementById("next-event-summary"),
   tableHead: document.getElementById("table-head"),
   tableBody: document.getElementById("table-body"),
   emptyState: document.getElementById("empty-state"),
   eventCount: document.getElementById("event-count"),
   lastRefresh: document.getElementById("last-refresh"),
   freshnessLabel: document.getElementById("freshness-label"),
+  exportCsv: document.getElementById("export-csv"),
+  exportIcs: document.getElementById("export-ics"),
   logCount: document.getElementById("log-count"),
   logViewer: document.getElementById("log-viewer"),
   copyLog: document.getElementById("copy-log"),
@@ -73,12 +83,7 @@ function normalizeList(value) {
 }
 
 function impactLabel(value) {
-  return {
-    ALL: "Tutti",
-    HIGH: "Alto",
-    MID: "Medio",
-    LOW: "Basso",
-  }[value] || value;
+  return { ALL: "Tutti", HIGH: "Alto", MID: "Medio", LOW: "Basso" }[value] || value;
 }
 
 function regionLabel(value) {
@@ -105,8 +110,7 @@ function currentTimezoneSpec() {
 function calendarDateToBackend(value) {
   if (!value) return "";
   const parts = value.split("-");
-  if (parts.length !== 3) return "";
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : "";
 }
 
 function buildSelect(select, values, labeler) {
@@ -120,9 +124,7 @@ function buildSelect(select, values, labeler) {
 }
 
 function ensureSelectValue(select, value, label = value) {
-  if (!value) return;
-  const exists = [...select.options].some((option) => option.value === value);
-  if (exists) return;
+  if (!value || [...select.options].some((option) => option.value === value)) return;
   const option = document.createElement("option");
   option.value = value;
   option.textContent = label;
@@ -132,35 +134,22 @@ function ensureSelectValue(select, value, label = value) {
 function buildTimezoneSelect(preference = "local") {
   els.timezone.replaceChildren();
   const localZone = localTimezoneName();
-
   const local = document.createElement("option");
   local.value = "local";
   local.textContent = `Locale (${localZone})`;
   els.timezone.append(local);
 
   const namedZones = [
-    "UTC",
-    "Europe/Rome",
-    "Europe/London",
-    "America/New_York",
-    "America/Chicago",
-    "America/Los_Angeles",
-    "Asia/Tokyo",
-    "Asia/Shanghai",
-    "Asia/Hong_Kong",
-    "Asia/Singapore",
-    "Asia/Kolkata",
-    "Australia/Sydney",
-    "Pacific/Auckland",
+    "UTC", "Europe/Rome", "Europe/London", "America/New_York", "America/Chicago",
+    "America/Los_Angeles", "Asia/Tokyo", "Asia/Shanghai", "Asia/Hong_Kong",
+    "Asia/Singapore", "Asia/Kolkata", "Australia/Sydney", "Pacific/Auckland",
   ];
-
   for (const zone of namedZones) {
     const option = document.createElement("option");
     option.value = zone;
     option.textContent = zone;
     els.timezone.append(option);
   }
-
   for (let offset = -12; offset <= 14; offset += 0.5) {
     if (offset === 0) continue;
     const spec = formatOffset(offset);
@@ -169,7 +158,6 @@ function buildTimezoneSelect(preference = "local") {
     option.textContent = `${spec} (fisso)`;
     els.timezone.append(option);
   }
-
   ensureSelectValue(els.timezone, preference);
   els.timezone.value = preference || "local";
   if (!els.timezone.value) els.timezone.value = "local";
@@ -177,8 +165,7 @@ function buildTimezoneSelect(preference = "local") {
 
 function buildAutoRefreshSelect(selectedMinutes) {
   els.autoRefresh.replaceChildren();
-  const options = normalizeList(state.initial?.auto_refresh_options);
-  for (const raw of options) {
+  for (const raw of normalizeList(state.initial?.auto_refresh_options)) {
     const minutes = Number(raw);
     if (!Number.isFinite(minutes)) continue;
     const option = document.createElement("option");
@@ -186,8 +173,7 @@ function buildAutoRefreshSelect(selectedMinutes) {
     option.textContent = minutes === 0 ? "Manuale" : `${minutes} min`;
     els.autoRefresh.append(option);
   }
-  const selected = String(Number(selectedMinutes));
-  els.autoRefresh.value = selected;
+  els.autoRefresh.value = String(Number(selectedMinutes));
   if (!els.autoRefresh.value) els.autoRefresh.value = "15";
   state.autoRefreshMinutes = Number(els.autoRefresh.value) || 0;
 }
@@ -211,8 +197,7 @@ function refreshDate(source) {
 
 function freshnessAgeMinutes(source) {
   const parsed = refreshDate(source);
-  if (!parsed) return null;
-  return Math.max(0, (Date.now() - parsed.getTime()) / 60000);
+  return parsed ? Math.max(0, (Date.now() - parsed.getTime()) / 60000) : null;
 }
 
 function freshnessText(source) {
@@ -225,9 +210,7 @@ function freshnessText(source) {
 }
 
 function freshnessThresholdMinutes() {
-  return state.autoRefreshMinutes > 0
-    ? Math.max(15, state.autoRefreshMinutes * 2)
-    : 60;
+  return state.autoRefreshMinutes > 0 ? Math.max(15, state.autoRefreshMinutes * 2) : 60;
 }
 
 function sourceIsStale(source) {
@@ -246,8 +229,7 @@ function sourceFreshnessSummary(source) {
 function updateSourceTabs() {
   for (const tab of els.sourceTabs) {
     const sourceKey = tab.dataset.source;
-    const selected = sourceKey === state.activeSource;
-    tab.setAttribute("aria-pressed", String(selected));
+    tab.setAttribute("aria-pressed", String(sourceKey === state.activeSource));
     const freshness = tab.querySelector(".source-freshness");
     if (freshness) freshness.textContent = sourceFreshnessSummary(sourceState(sourceKey));
   }
@@ -269,7 +251,9 @@ function applySourceSort() {
 function updateSourceHeader() {
   const source = sourceState();
   if (!source) return;
-  els.sourceKicker.textContent = source.key === "ig" ? "FOREXFACTORY" : "FXSTREET";
+  els.sourceKicker.textContent = source.key === "ig"
+    ? "FOREXFACTORY"
+    : source.key === "combined" ? "COMBINATO" : "FXSTREET";
   els.sourceTitle.textContent = source.name;
   els.sourceDescription.textContent = source.description;
   els.lastRefresh.textContent = source.last_refresh || "mai";
@@ -284,7 +268,6 @@ function updateActivityState() {
   els.refreshSource.disabled = running;
   els.refreshSource.classList.toggle("is-active", running);
   els.refreshAll.classList.toggle("is-active", state.refreshing.size > 0);
-  els.refreshAll.disabled = state.refreshing.size >= state.sources.size && state.sources.size > 0;
 
   els.sourceStatus.classList.remove("is-ready", "is-running", "is-error", "is-stale");
   if (running) {
@@ -315,15 +298,12 @@ function updateActivityState() {
 
 function updateFreshnessUi() {
   updateSourceTabs();
-  const source = sourceState();
-  els.freshnessLabel.textContent = freshnessText(source);
+  els.freshnessLabel.textContent = freshnessText(sourceState());
   updateActivityState();
 }
 
 function startFreshnessClock() {
-  if (state.freshnessTimer !== null) {
-    window.clearInterval(state.freshnessTimer);
-  }
+  if (state.freshnessTimer !== null) window.clearInterval(state.freshnessTimer);
   state.freshnessTimer = window.setInterval(updateFreshnessUi, 30000);
 }
 
@@ -346,27 +326,20 @@ function renderHeader() {
     th.draggable = true;
     th.dataset.originalIndex = String(column.originalIndex);
     th.scope = "col";
-
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.key = column.key;
-    button.dataset.direction = state.sortDirection;
     button.setAttribute("aria-label", `Ordina per ${column.label}`);
     if (state.sortKey === column.key) {
       button.classList.add("is-sorted");
-      button.setAttribute(
-        "aria-sort",
-        state.sortDirection === "asc" ? "ascending" : "descending",
-      );
+      button.setAttribute("aria-sort", state.sortDirection === "asc" ? "ascending" : "descending");
     }
-
     const label = document.createElement("span");
     label.textContent = column.label;
     const indicator = document.createElement("span");
     indicator.className = "sort-indicator";
     indicator.setAttribute("aria-hidden", "true");
     button.append(label, indicator);
-
     button.addEventListener("click", () => toggleSort(column.key));
     th.addEventListener("dragstart", onHeaderDragStart);
     th.addEventListener("dragend", onHeaderDragEnd);
@@ -405,11 +378,9 @@ async function onHeaderDrop(event) {
   event.currentTarget.classList.remove("is-drop-target");
   const source = sourceState();
   if (!source) return;
-
   const dragged = Number(event.dataTransfer.getData("text/plain"));
   const target = Number(event.currentTarget.dataset.originalIndex);
   if (!Number.isInteger(dragged) || !Number.isInteger(target) || dragged === target) return;
-
   const previous = normalizeList(source.column_order).slice();
   const next = previous.slice();
   const from = next.indexOf(dragged);
@@ -420,7 +391,6 @@ async function onHeaderDrop(event) {
   source.column_order = next;
   renderHeader();
   renderBody();
-
   const saved = await bridgeCall("saveColumnOrder", state.activeSource, JSON.stringify(next));
   if (!saved) {
     source.column_order = previous;
@@ -433,33 +403,22 @@ async function onHeaderDrop(event) {
 async function toggleSort(key) {
   const source = sourceState();
   if (!source) return;
-
   const previousKey = state.sortKey;
   const previousDirection = state.sortDirection;
-  if (state.sortKey === key) {
-    state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
-  } else {
+  if (state.sortKey === key) state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
+  else {
     state.sortKey = key;
     state.sortDirection = "asc";
   }
-
   source.sort_key = state.sortKey || "";
   source.sort_direction = state.sortDirection;
   renderHeader();
   renderBody();
-
   try {
-    const saved = await bridgeCall(
-      "saveSort",
-      state.activeSource,
-      source.sort_key,
-      source.sort_direction,
-    );
-    if (saved) return;
+    if (await bridgeCall("saveSort", state.activeSource, source.sort_key, source.sort_direction)) return;
   } catch (error) {
     // Revert below.
   }
-
   state.sortKey = previousKey;
   state.sortDirection = previousDirection;
   source.sort_key = previousKey || "";
@@ -471,29 +430,28 @@ async function toggleSort(key) {
 
 function comparableValue(event, key) {
   const value = event[key] ?? "";
-  if (key === "impact") {
-    return { HIGH: 3, MID: 2, LOW: 1 }[value] || 0;
-  }
+  if (key === "impact") return { HIGH: 3, MID: 2, LOW: 1 }[value] || 0;
   if (key === "date") {
     const [day, month, year] = String(value).split("/").map(Number);
     return Number.isFinite(year) ? year * 10000 + month * 100 + day : 0;
   }
-  if (key === "time") {
-    return String(value).replace(":", "");
-  }
+  if (key === "time") return String(value).replace(":", "");
   return String(value);
 }
 
 function sortedEvents() {
-  if (!state.sortKey) return state.events.slice();
+  const filtered = FinancialCalendarNavigation.filterEvents(
+    state.events,
+    state.navigation.searchQuery,
+    state.navigation.quickRange,
+  );
+  if (!state.sortKey) return filtered.slice();
   const direction = state.sortDirection === "asc" ? 1 : -1;
   const key = state.sortKey;
-  return state.events.slice().sort((left, right) => {
+  return filtered.slice().sort((left, right) => {
     const a = comparableValue(left, key);
     const b = comparableValue(right, key);
-    if (typeof a === "number" && typeof b === "number") {
-      return (a - b) * direction;
-    }
+    if (typeof a === "number" && typeof b === "number") return (a - b) * direction;
     return String(a).localeCompare(String(b), "it", { numeric: true, sensitivity: "base" }) * direction;
   });
 }
@@ -525,13 +483,47 @@ function makeImpactCell(event) {
   return tag;
 }
 
+function makeEventNameCell(event) {
+  const td = document.createElement("td");
+  td.dataset.key = "event_name";
+  const wrapper = document.createElement("span");
+  wrapper.className = "event-name-wrap";
+  const title = document.createElement("span");
+  title.className = "event-name-label";
+  title.textContent = event.event_name || "—";
+  wrapper.append(title);
+  const eventDate = FinancialCalendarNavigation.eventUtcDate(event);
+  const countdown = eventDate
+    ? FinancialCalendarNavigation.formatCountdown(eventDate.getTime() - Date.now())
+    : "";
+  if (countdown) {
+    const timing = document.createElement("small");
+    timing.className = "event-countdown";
+    timing.textContent = countdown;
+    wrapper.append(timing);
+  }
+  const duplicateGroup = FinancialCalendarOperations.duplicateGroup(event);
+  if (duplicateGroup) {
+    const badge = document.createElement("small");
+    badge.className = "duplicate-badge";
+    badge.textContent = `Possibile duplicato · ${duplicateGroup}`;
+    wrapper.append(badge);
+  }
+  td.append(wrapper);
+  return td;
+}
+
 function makeCell(event, key) {
+  if (key === "event_name") return makeEventNameCell(event);
   const td = document.createElement("td");
   td.dataset.key = key;
-  if (key === "country") {
-    td.append(makeCountryCell(event));
-  } else if (key === "impact") {
-    td.append(makeImpactCell(event));
+  if (key === "country") td.append(makeCountryCell(event));
+  else if (key === "impact") td.append(makeImpactCell(event));
+  else if (key === "source") {
+    const label = document.createElement("span");
+    label.className = "source-label";
+    label.textContent = FinancialCalendarOperations.sourceLabel(event.source);
+    td.append(label);
   } else {
     const value = event[key];
     td.textContent = value === null || value === undefined || value === "" ? "—" : String(value);
@@ -539,21 +531,38 @@ function makeCell(event, key) {
   return td;
 }
 
+function updateNextEventSummary(events) {
+  const next = FinancialCalendarNavigation.nextHighEvent(events);
+  if (!next) {
+    els.nextEventSummary.textContent = "Nessun evento HIGH imminente";
+    return;
+  }
+  const countdown = FinancialCalendarNavigation.formatCountdown(next.date.getTime() - Date.now());
+  els.nextEventSummary.textContent = `Prossimo HIGH: ${next.event.event_name} · ${countdown}`;
+}
+
 function renderBody() {
   els.tableBody.replaceChildren();
   const columns = orderedColumns();
   const events = sortedEvents();
-
+  const next = FinancialCalendarNavigation.nextHighEvent(events);
+  const now = Date.now();
   for (const event of events) {
     const row = document.createElement("tr");
-    for (const column of columns) {
-      row.append(makeCell(event, column.key));
-    }
+    const eventDate = FinancialCalendarNavigation.eventUtcDate(event);
+    if (eventDate && eventDate.getTime() < now) row.classList.add("is-past");
+    if (next?.event === event) row.classList.add("is-next-high");
+    if (FinancialCalendarOperations.duplicateGroup(event)) row.classList.add("is-probable-duplicate");
+    for (const column of columns) row.append(makeCell(event, column.key));
     els.tableBody.append(row);
   }
-
   els.emptyState.hidden = events.length > 0;
-  els.eventCount.textContent = `${events.length} ${events.length === 1 ? "evento" : "eventi"}`;
+  const countText = `${events.length} ${events.length === 1 ? "evento" : "eventi"}`;
+  const duplicateCount = FinancialCalendarOperations.duplicateGroupCount(events);
+  els.eventCount.textContent = duplicateCount
+    ? `${countText} · ${duplicateCount} ${duplicateCount === 1 ? "gruppo duplicato" : "gruppi duplicati"}`
+    : countText;
+  updateNextEventSummary(events);
 }
 
 function hideError() {
@@ -576,9 +585,7 @@ function showError(message, details = "") {
 async function loadEvents() {
   const requestId = ++state.requestSerial;
   const sourceKey = state.activeSource;
-  const source = sourceState(sourceKey);
-  if (!source) return;
-
+  if (!sourceState(sourceKey)) return;
   try {
     const events = await bridgeCall(
       "getEventsInTimezone",
@@ -592,9 +599,7 @@ async function loadEvents() {
     state.events = normalizeList(events);
     renderBody();
   } catch (error) {
-    if (sourceKey === state.activeSource) {
-      showError("Impossibile leggere gli eventi dal backend.", String(error));
-    }
+    if (sourceKey === state.activeSource) showError("Impossibile leggere gli eventi dal backend.", String(error));
   }
 }
 
@@ -604,12 +609,7 @@ async function persistFiltersAndReload() {
   source.selected_region = els.region.value || "ALL";
   source.selected_impact = els.impact.value || "ALL";
   try {
-    const saved = await bridgeCall(
-      "saveFilters",
-      state.activeSource,
-      source.selected_region,
-      source.selected_impact,
-    );
+    const saved = await bridgeCall("saveFilters", state.activeSource, source.selected_region, source.selected_impact);
     if (!saved) showToast("Impossibile salvare i filtri");
   } catch (error) {
     showToast("Errore nel salvataggio dei filtri");
@@ -665,38 +665,36 @@ function updateSourceRefresh(sourceKey, payload) {
 
 async function handleBackendEvent(eventName, payload) {
   const sourceKey = payload?.source || "";
+  if (payload?.combined_state) {
+    const previous = sourceState("combined") || {};
+    state.sources.set("combined", { ...previous, ...payload.combined_state });
+  }
+
   if (eventName === "calendar_refresh_started") {
     state.refreshing.add(sourceKey);
     const source = sourceState(sourceKey);
     if (source) source.refreshing = true;
+    const combined = sourceState("combined");
+    if (combined) combined.refreshing = true;
     if (sourceKey === state.activeSource) hideError();
-    updateFreshnessUi();
-    return;
-  }
-
-  if (eventName === "calendar_refreshed") {
+  } else if (eventName === "calendar_refreshed") {
     state.refreshing.delete(sourceKey);
     updateSourceRefresh(sourceKey, payload || {});
     if (sourceKey === state.activeSource) {
       hideError();
       els.lastRefresh.textContent = sourceState()?.last_refresh || "mai";
-      await loadEvents();
       showToast(`${sourceState()?.name || "Calendario"}: ${payload.count ?? 0} eventi aggiornati`);
     }
-    updateFreshnessUi();
-    return;
-  }
-
-  if (eventName === "calendar_refresh_error") {
+    if (sourceKey === state.activeSource || state.activeSource === "combined") await loadEvents();
+  } else if (eventName === "calendar_refresh_error") {
     state.refreshing.delete(sourceKey);
     updateSourceRefresh(sourceKey, payload || {});
-    if (sourceKey === state.activeSource) {
-      showError(payload?.error || "Aggiornamento non riuscito", payload?.details || "");
-    } else {
-      showToast(`Aggiornamento ${sourceState(sourceKey)?.name || sourceKey} non riuscito`);
-    }
-    updateFreshnessUi();
+    if (sourceKey === state.activeSource) showError(payload?.error || "Aggiornamento non riuscito", payload?.details || "");
+    else showToast(`Aggiornamento ${sourceState(sourceKey)?.name || sourceKey} non riuscito`);
+    if (state.activeSource === "combined") await loadEvents();
   }
+  updateSourceHeader();
+  updateFreshnessUi();
 }
 
 function appendLog(payload) {
@@ -713,7 +711,6 @@ function renderLogs() {
     const row = document.createElement("div");
     row.className = "log-line";
     row.dataset.level = item.level || "INFO";
-
     const time = document.createElement("span");
     time.className = "log-time";
     time.textContent = item.time || "--:--:--";
@@ -729,13 +726,10 @@ function renderLogs() {
 }
 
 async function copyLogs() {
-  const text = state.logs
-    .map((item) => `${item.time || ""} [${item.level || "INFO"}] ${item.message || ""}`)
-    .join("\n");
+  const text = state.logs.map((item) => `${item.time || ""} [${item.level || "INFO"}] ${item.message || ""}`).join("\n");
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
-    showToast("Log copiato negli appunti");
   } catch (error) {
     const textarea = document.createElement("textarea");
     textarea.value = text;
@@ -746,8 +740,8 @@ async function copyLogs() {
     textarea.select();
     document.execCommand("copy");
     textarea.remove();
-    showToast("Log copiato negli appunti");
   }
+  showToast("Log copiato negli appunti");
 }
 
 function showToast(message) {
@@ -755,30 +749,95 @@ function showToast(message) {
   toast.className = "toast";
   toast.textContent = message;
   els.toastRegion.replaceChildren(toast);
-  window.setTimeout(() => {
-    if (toast.isConnected) toast.remove();
-  }, 3000);
+  window.setTimeout(() => { if (toast.isConnected) toast.remove(); }, 3000);
+}
+
+function updateQuickRangeButtons() {
+  for (const button of els.quickRangeButtons) {
+    button.setAttribute("aria-pressed", String(button.dataset.quickRange === state.navigation.quickRange));
+  }
+}
+
+async function selectQuickRange(range) {
+  const today = FinancialCalendarNavigation.isoDateInTimezone(new Date(), currentTimezoneSpec());
+  state.navigation.quickRange = range;
+  if (range === "today") els.date.value = today;
+  else if (range === "tomorrow") els.date.value = FinancialCalendarNavigation.addCalendarDays(today, 1);
+  else els.date.value = "";
+  updateQuickRangeButtons();
+  await persistUiStateAndReload();
+}
+
+function startNavigationClock() {
+  if (state.navigation.timer !== null) window.clearInterval(state.navigation.timer);
+  state.navigation.timer = window.setInterval(renderBody, 30000);
+}
+
+function exportableEvents() {
+  return sortedEvents().map((event) => ({ ...event }));
+}
+
+async function requestExport(format) {
+  const events = exportableEvents();
+  if (!events.length) {
+    showToast("Nessun evento visibile da esportare");
+    return;
+  }
+  try {
+    const result = await bridgeCall("exportEvents", format, JSON.stringify(events));
+    if (result?.cancelled) return;
+    if (!result?.ok) {
+      showToast(result?.error || "Export non riuscito");
+      return;
+    }
+    showToast(`${format.toUpperCase()} esportato · ${result.count ?? events.length} eventi`);
+  } catch (error) {
+    showToast("Export non riuscito");
+  }
 }
 
 function bindControls() {
-  for (const tab of els.sourceTabs) {
-    tab.addEventListener("click", () => selectSource(tab.dataset.source));
-  }
+  for (const tab of els.sourceTabs) tab.addEventListener("click", () => selectSource(tab.dataset.source));
   els.region.addEventListener("change", persistFiltersAndReload);
   els.impact.addEventListener("change", persistFiltersAndReload);
-  els.date.addEventListener("change", persistUiStateAndReload);
-  els.timezone.addEventListener("change", persistUiStateAndReload);
+  els.date.addEventListener("change", () => {
+    state.navigation.quickRange = els.date.value ? "manual" : "all";
+    updateQuickRangeButtons();
+    persistUiStateAndReload();
+  });
+  els.timezone.addEventListener("change", () => {
+    if (["today", "tomorrow"].includes(state.navigation.quickRange)) {
+      state.navigation.quickRange = "manual";
+      updateQuickRangeButtons();
+    }
+    persistUiStateAndReload();
+  });
   els.autoRefresh.addEventListener("change", async () => {
     if (await persistUiState()) {
-      showToast(
-        state.autoRefreshMinutes === 0
-          ? "Auto-refresh disattivato"
-          : `Auto-refresh ogni ${state.autoRefreshMinutes} minuti`,
-      );
+      showToast(state.autoRefreshMinutes === 0 ? "Auto-refresh disattivato" : `Auto-refresh ogni ${state.autoRefreshMinutes} minuti`);
     }
   });
+  els.notificationLead.addEventListener("change", async () => {
+    const minutes = Number(els.notificationLead.value) || 0;
+    try {
+      const saved = await bridgeCall("saveNotificationLead", minutes);
+      if (!saved) showToast("Impossibile salvare le notifiche");
+      else showToast(minutes === 0 ? "Notifiche HIGH disattivate" : `Notifiche HIGH ${minutes} minuti prima`);
+    } catch (error) {
+      showToast("Errore nel salvataggio delle notifiche");
+    }
+  });
+  els.eventSearch.addEventListener("input", () => {
+    state.navigation.searchQuery = els.eventSearch.value || "";
+    renderBody();
+  });
+  for (const button of els.quickRangeButtons) {
+    button.addEventListener("click", () => selectQuickRange(button.dataset.quickRange));
+  }
   els.refreshSource.addEventListener("click", () => state.bridge.refreshSource(state.activeSource));
   els.refreshAll.addEventListener("click", () => state.bridge.refreshAll());
+  els.exportCsv.addEventListener("click", () => requestExport("csv"));
+  els.exportIcs.addEventListener("click", () => requestExport("ics"));
   els.dismissError.addEventListener("click", hideError);
   els.copyLog.addEventListener("click", copyLogs);
 }
@@ -791,34 +850,33 @@ async function bootstrap() {
     els.appName.textContent = meta.name || "Calendario Finanziario";
     els.appDescription.textContent = meta.description || "Calendari economici";
     document.title = meta.name || "Calendario Finanziario";
-
     for (const source of normalizeList(state.initial?.sources)) {
       state.sources.set(source.key, { ...source });
       if (source.refreshing) state.refreshing.add(source.key);
     }
-
     const preferredSource = uiState.active_source || "ig";
     state.activeSource = state.sources.has(preferredSource) ? preferredSource : "ig";
-
     buildSelect(els.region, normalizeList(state.initial?.regions), regionLabel);
     buildSelect(els.impact, normalizeList(state.initial?.impacts), impactLabel);
     buildTimezoneSelect(uiState.timezone_name || "local");
     buildAutoRefreshSelect(uiState.auto_refresh_minutes ?? 15);
     els.date.value = uiState.selected_date || "";
-
+    els.notificationLead.value = String(Number(uiState.high_notification_minutes) || 0);
+    if (!els.notificationLead.value) els.notificationLead.value = "0";
+    state.navigation.quickRange = els.date.value ? "manual" : "all";
     applySourceFilters();
     applySourceSort();
     bindControls();
+    updateQuickRangeButtons();
     updateSourceTabs();
     updateSourceHeader();
     renderHeader();
     await loadEvents();
-
     const logs = await bridgeCall("getRecentLogs");
     state.logs = normalizeList(logs).slice(-250);
     renderLogs();
-
     startFreshnessClock();
+    startNavigationClock();
     setConnectionReady(meta.version || "—");
     els.app.setAttribute("aria-busy", "false");
     state.bridge.start();
@@ -836,7 +894,6 @@ function connectWebChannel() {
     showError("Il bridge Qt non è disponibile. Avvia l’applicazione tramite main.py.");
     return;
   }
-
   new QWebChannel(qt.webChannelTransport, (channel) => {
     state.bridge = channel.objects.bridge;
     state.bridge.backendEvent.connect(handleBackendEvent);

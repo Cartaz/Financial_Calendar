@@ -317,19 +317,7 @@ class Settings:
             if not saved:
                 for key, (previous, _) in changed.items():
                     setattr(self._data, key, previous)
-
-        if saved:
-            for key, (_, value) in changed.items():
-                self._emit_config_changed(key, value)
         return saved
-
-    def _emit_config_changed(self, key: str, value: Any) -> None:
-        try:
-            from core.event_bus import EventBus
-
-            EventBus().emit("config_changed", {"key": key, "value": str(value)})
-        except Exception as exc:
-            logger.debug("Impossibile emettere config_changed: %s", exc)
 
     def reset(self) -> bool:
         with self._lock:

@@ -1,6 +1,6 @@
 # Financial Calendar
 
-Applicazione desktop Python per i calendari economici **ForexFactory/Faireconomy** e **FXStreet**, con interfaccia HTML/CSS/JavaScript ospitata in Qt WebEngine.
+Applicazione desktop Python per i calendari economici **ForexFactory/Faireconomy** e **FXStreet**, con interfaccia HTML/CSS/JavaScript locale ospitata in Qt WebEngine.
 
 **Release stabile: 1.0.0**
 
@@ -23,7 +23,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Lo script crea la `.venv` locale e installa esclusivamente le dipendenze di `requirements.txt`.
+Lo script verifica Python 3.12+, crea o ripara la `.venv` locale, installa esclusivamente le dipendenze di `requirements.txt` e controlla gli import critici di requests, Qt, WebChannel e WebEngine.
 
 ## Avvio
 
@@ -42,39 +42,42 @@ Per il logging di debug:
 ```text
 assets/       Icone e bandiere
 config/       Costanti e impostazioni persistenti
-core/         Modelli, controller, cache, export, notifiche e scraper
+core/         Dominio, controller, query, cache, export, policy e scraper
 tests/        Test automatici e fixture anonimizzate dei feed
-ui/           Finestra Qt, bridge QWebChannel e frontend HTML/CSS/JS
+ui/           Shell Qt, runtime nativo e bridge QWebChannel
+ui/web/       Presentation locale HTML/CSS/JavaScript
 
 install.sh    Installazione locale nella .venv
-main.py       Entry point
+main.py       Entry point e wiring applicativo
 requirements.txt
 CHANGELOG.md  Cronologia delle release pubbliche
 ```
 
-Le cartelle applicative principali sono quindi `core`, `config`, `assets`, `tests` e `ui`.
+Le cartelle applicative principali sono `core`, `config`, `assets`, `tests` e `ui`; la presentation è confinata in `ui/web/`.
 
 ## Architettura
 
 ```text
-core / config
-    ↓
-AppController
-    ↓
+config + core services/policies
+          ↓
+     AppController
+          ↓
+ui.runtime + native adapters
+          ↓
 ui.bridge / QWebChannel
-    ↓
-ui.window / Qt WebEngine
-    ↓
-HTML + CSS + JavaScript
+          ↓
+      ui/web/*
 ```
 
-Non viene avviato alcun server HTTP locale e non è richiesto alcun browser esterno. Python gestisce rete, cache, persistenza, timer, notifiche desktop, export e osservabilità dei refresh; il frontend gestisce presentazione e navigazione locale del dataset già ricevuto.
+Python possiede dati operativi, rete, cache, persistenza, query combinate, policy di matching dei duplicati, policy delle notifiche, export e integrazione desktop. `CalendarBridge` espone soltanto un'API di trasporto e presentazione: valida gli input, delega ai servizi Python e serializza valori semplici per JavaScript. Il frontend mantiene esclusivamente stato temporaneo di presentazione, ricerca/navigazione locale del dataset ricevuto, ordinamento visivo e rendering.
+
+Non viene avviato alcun server HTTP locale. Il contenuto WebEngine locale non può accedere direttamente a URL remoti; eventuali navigazioni HTTP(S) vengono consegnate al browser di sistema. Non viene eseguito JavaScript non attendibile.
 
 ## Funzioni principali
 
 - calendari ForexFactory/Faireconomy e FXStreet
 - vista combinata `Tutti` con filtri, colonne e ordinamento persistenti indipendenti
-- indicazione non distruttiva dei probabili duplicati tra le due sorgenti, senza eliminare righe
+- indicazione non distruttiva dei probabili duplicati tra le due sorgenti, calcolata da una policy canonica Python
 - refresh asincrono e indipendente per sorgente
 - auto-refresh configurabile: Manuale / 5 / 15 / 30 / 60 minuti
 - indicatore di freschezza indipendente per ciascuna sorgente
@@ -120,9 +123,9 @@ Le dipendenze di sviluppo non sono mantenute in file di configurazione aggiuntiv
 .venv/bin/python -m pip install "pytest>=8.3,<9" "ruff>=0.12,<1"
 .venv/bin/python -m compileall -q main.py config core ui tests
 .venv/bin/ruff check --target-version py312 --select E4,E7,E9,F main.py config core ui tests
-node --check ui/app.js
-node --check ui/navigation.js
-node --check ui/operations.js
+node --check ui/web/app.js
+node --check ui/web/navigation.js
+node --check ui/web/operations.js
 QT_QPA_PLATFORM=offscreen \
 QTWEBENGINE_DISABLE_SANDBOX=1 \
 QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --no-sandbox" \

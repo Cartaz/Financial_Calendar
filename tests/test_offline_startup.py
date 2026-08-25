@@ -10,6 +10,7 @@ from core.app_controller import AppController
 from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from ui.bridge import CalendarBridge
+from ui.runtime import CalendarRuntime
 
 
 def _redirect_paths(monkeypatch, tmp_path) -> None:
@@ -42,7 +43,8 @@ def test_controller_and_bridge_start_with_cached_data(monkeypatch, tmp_path) -> 
 
     settings = Settings()
     controller = AppController(settings)
-    bridge = CalendarBridge(controller, settings)
+    runtime = CalendarRuntime(controller, settings)
+    bridge = CalendarBridge(controller, settings, runtime)
     try:
         assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "cache"
         assert controller.get_last_refresh(CalendarSource.FOREXFACTORY) == refreshed_at
