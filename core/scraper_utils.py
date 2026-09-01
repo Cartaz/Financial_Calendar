@@ -8,40 +8,27 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-from pathlib import Path
+
+from config.constants import PathConfig
 
 logger = logging.getLogger(__name__)
 
 
 def save_debug_json(data: object, name: str) -> None:
-    """Salva il JSON grezzo per debug in XDG_DATA_HOME.
-
-    Args:
-        data: Dati JSON da salvare.
-        name: Nome del file (senza estensione).
-    """
+    """Salva il JSON grezzo per debug nella directory dati applicativa."""
     try:
-        xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-        debug_dir = xdg_data / "financial_calendar" / "debug"
+        debug_dir = PathConfig.APP_DATA_DIR / "debug"
         debug_dir.mkdir(parents=True, exist_ok=True)
         out_file = debug_dir / f"{name}.json"
         with open(out_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str, ensure_ascii=False)
         logger.debug("Debug JSON salvato: %s", out_file)
-    except Exception as exc:
+    except OSError as exc:
         logger.debug("Impossibile salvare debug JSON: %s", exc)
 
 
 def clean_string(value: object) -> str:
-    """Pulisce un valore dall'API restituendo una stringa vuota se nullo.
-
-    Args:
-        value: Valore dall'API (stringa, None, ecc.).
-
-    Returns:
-        Stringa pulita o stringa vuota.
-    """
+    """Pulisce un valore dall'API restituendo una stringa vuota se nullo."""
     if value is None:
         return ""
     s = str(value).strip()
@@ -51,18 +38,7 @@ def clean_string(value: object) -> str:
 
 
 def format_value(value: float | int | None, unit: str | None = None) -> str:
-    """Formatta un valore numerico per la visualizzazione.
-
-    L'API FXStreet restituisce valori numerici (float/null).
-    Se presente, aggiunge l'unità di misura.
-
-    Args:
-        value: Valore numerico o None.
-        unit: Unità di misura opzionale (es. '%', 'B', 'M').
-
-    Returns:
-        Stringa formattata del valore.
-    """
+    """Formatta un valore numerico per la visualizzazione."""
     if value is None:
         return ""
     if isinstance(value, float) and value == int(value):
