@@ -54,6 +54,12 @@ def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
     events: list[CalendarEvent] = []
 
     for raw_index, item in enumerate(data):
+        if not isinstance(item, dict):
+            logger.warning(
+                "ForexFactory: evento raw %d ignorato: record non-object",
+                raw_index,
+            )
+            continue
         try:
             impact_raw = item.get("impact", "Low")
             impact_text = (
@@ -89,7 +95,7 @@ def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
                     source=CalendarSource.FOREXFACTORY,
                 )
             )
-        except Exception as exc:
+        except (ScraperParseError, TypeError, ValueError, OverflowError) as exc:
             logger.warning("ForexFactory: evento raw %d ignorato: %s", raw_index, exc)
 
     return events

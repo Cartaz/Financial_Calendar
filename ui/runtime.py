@@ -98,3 +98,9 @@ class CalendarRuntime(QObject):
         self.configure_notifications()
         self._controller.refresh_all()
         self.check_notifications()
+
+    def stop(self) -> None:
+        """Idempotently stop all Qt timers owned by the runtime."""
+        self._started = False
+        self.auto_refresh_timer.stop()
+        self.notification_timer.stop()

@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from core.time_utils import try_parse_utc
+
 
 CSV_COLUMNS = [
     "source",
@@ -40,19 +42,6 @@ def render_csv(events: Iterable[Mapping[str, object]]) -> str:
     for event in events:
         writer.writerow({key: _text(event.get(key, "")) for key in CSV_COLUMNS})
     return output.getvalue()
-
-
-def _parse_utc(value: object) -> datetime | None:
-    text = _text(value).strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        return None
-    return parsed.astimezone(timezone.utc)
 
 
 def _ics_escape(value: object) -> str:
@@ -122,7 +111,7 @@ def render_ics(
     ]
 
     for event in events:
-        dt_utc = _parse_utc(event.get("utc_dt"))
+        dt_utc = try_parse_utc(event.get("utc_dt"))
         if dt_utc is None:
             continue
 
