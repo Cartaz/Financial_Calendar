@@ -15,6 +15,7 @@ from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_fxstreet import scrape_fxstreet_calendar
 from core.scraper_ig import scrape_ig_calendar
+from core.time_utils import try_parse_utc
 
 logger = logging.getLogger(__name__)
 
@@ -260,19 +261,14 @@ class AppController:
     def _parse_event_utc(event: CalendarEvent) -> datetime | None:
         if not event.utc_dt:
             return None
-        try:
-            parsed = datetime.fromisoformat(event.utc_dt.replace("Z", "+00:00"))
-        except (TypeError, ValueError):
-            logger.debug("Timestamp non valido per %s: %r", event.event_name, event.utc_dt)
-            return None
-        if parsed.tzinfo is None or parsed.utcoffset() is None:
+        parsed = try_parse_utc(event.utc_dt)
+        if parsed is None:
             logger.warning(
-                "Timestamp naive ignorato per %s: %s",
+                "Timestamp non valido o naive ignorato per %s: %s",
                 event.event_name,
                 event.utc_dt,
             )
-            return None
-        return parsed.astimezone(timezone.utc)
+        return parsed
 
     @staticmethod
     def _filter_past_events(events: list[CalendarEvent]) -> list[CalendarEvent]:
