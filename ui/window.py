@@ -35,7 +35,7 @@ class LocalOnlyPage(QWebEnginePage):
         if url.scheme().lower() in {"http", "https"}:
             QDesktopServices.openUrl(url)
             return False
-        return url.scheme().lower() in {"", "file", "qrc", "data", "about"}
+        return url.scheme().lower() in {"", "file", "qrc", "about"}
 
 
 class CalendarWindow(QMainWindow):
@@ -75,6 +75,17 @@ class CalendarWindow(QMainWindow):
         page_settings.setAttribute(
             QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows,
             False,
+        )
+        page_settings.setAttribute(
+            QWebEngineSettings.WebAttribute.NavigateOnDropEnabled,
+            False,
+        )
+        page_settings.setAttribute(
+            QWebEngineSettings.WebAttribute.DnsPrefetchEnabled,
+            False,
+        )
+        page_settings.setUnknownUrlSchemePolicy(
+            QWebEngineSettings.UnknownUrlSchemePolicy.DisallowUnknownUrlSchemes
         )
 
         self.runtime = CalendarRuntime(controller, settings)
@@ -144,6 +155,7 @@ class CalendarWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         """Treat the window close button as an explicit application exit."""
         self._save_window_geometry()
+        self.runtime.stop()
         event.accept()
         app = QApplication.instance()
         if app is not None:
