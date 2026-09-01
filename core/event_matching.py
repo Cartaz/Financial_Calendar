@@ -4,22 +4,12 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import datetime, timezone
 
 from core.models import CalendarEvent
+from core.time_utils import try_parse_utc
 
 _DUPLICATE_WINDOW_SECONDS = 15 * 60
 _DUPLICATE_DICE_THRESHOLD = 0.72
-
-
-def _parse_utc(value: str) -> datetime | None:
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        return None
-    return parsed.astimezone(timezone.utc)
 
 
 def _normalized_name(value: str) -> str:
@@ -57,8 +47,8 @@ def events_probably_duplicate(left: CalendarEvent, right: CalendarEvent) -> bool
     if left.source == right.source or left.country != right.country:
         return False
 
-    left_dt = _parse_utc(left.utc_dt)
-    right_dt = _parse_utc(right.utc_dt)
+    left_dt = try_parse_utc(left.utc_dt)
+    right_dt = try_parse_utc(right.utc_dt)
     if left_dt is None or right_dt is None:
         return False
     if abs((left_dt - right_dt).total_seconds()) > _DUPLICATE_WINDOW_SECONDS:
