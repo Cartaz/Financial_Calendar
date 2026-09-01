@@ -147,9 +147,11 @@ def test_release_publish_is_gated_by_ci_and_has_no_branch_cleanup() -> None:
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
+    assert "  workflow_dispatch:\n" in workflow
     assert "  publish:\n" in workflow
     assert "    needs: test\n" in workflow
     assert "github.event_name == 'push'" in workflow
+    assert "github.event_name == 'workflow_dispatch'" in workflow
     assert "gh release create" in workflow
     assert "Deleting merged branch" not in workflow
     assert not (root / ".github" / "workflows" / "publish-release.yml").exists()
