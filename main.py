@@ -51,6 +51,8 @@ def main() -> int:
         settings.save()
         return 1
 
+    app.aboutToQuit.connect(window.runtime.stop)
+
     web_log_handler = WebLogHandler(window.bridge)
     web_log_handler.setLevel(logging.DEBUG if args.debug else logging.INFO)
     web_log_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
