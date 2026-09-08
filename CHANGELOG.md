@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.0] - 2026-09-08
+
+### UI QML nativa
+- QApplication e QQmlApplicationEngine; eliminati WebEngine, WebChannel e frontend web dopo confronto di parità su 81 combinazioni.
+- Tabella e log virtualizzati, tema neumorfico compatto condiviso, Noto Sans incluso, controlli accessibili e navigazione da tastiera.
+- Conservati sorgenti, filtri, ricerca, intervalli, ordinamento e riordino colonne, export, cache, notifiche, log, scorciatoie e geometria.
+
+### Affidabilità
+- Query, matching, salvataggi, export e notifiche fuori dal thread GUI; export dalla vista canonica Python.
+- Refresh protetto fino al completamento della persistenza, errori per sorgente e disponibilità parziale esplicita.
+- HTTP con scadenza totale, annullamento, limite alla risposta e Retry-After; consegna QtDBus con timeout.
+- Validazione robusta di fusi, minuti e timestamp; conteggio ICS effettivo, protezione CSV, notifiche confermate solo dopo consegna e memoria della policy potata.
+- Timer non rimandati dagli aggiornamenti della vista; installer ripara pip e verifica QML.
+- CI con compileall, Ruff, QML lint/load, RHI OpenGL, interazioni Qt e trasporto D-Bus reale su Python 3.12/3.14.
+
 ## [1.0.1] - 2026-08-25
 
 Release di manutenzione strategica successiva alla chiusura della roadmap 1.0.

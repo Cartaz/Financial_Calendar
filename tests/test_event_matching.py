@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from core.event_matching import build_duplicate_groups, event_identity, events_probably_duplicate
+from core.event_matching import (
+    build_duplicate_groups,
+    event_identity,
+    events_probably_duplicate,
+)
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.notification_policy import NotificationPolicy
 

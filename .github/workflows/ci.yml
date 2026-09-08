@@ -18,8 +18,7 @@ jobs:
         python-version: ["3.12", "3.14"]
     env:
       QT_QPA_PLATFORM: offscreen
-      QTWEBENGINE_DISABLE_SANDBOX: "1"
-      QTWEBENGINE_CHROMIUM_FLAGS: "--disable-gpu --no-sandbox"
+      QT_QUICK_BACKEND: software
 
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +31,7 @@ jobs:
       - name: Install Qt runtime libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libegl1 libgl1
+          sudo apt-get install -y libegl1 libgl1 libegl-mesa0 libgl1-mesa-dri dbus-x11 xvfb libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0
 
       - name: Install dependencies
         run: |
@@ -48,14 +47,22 @@ jobs:
       - name: Ruff
         run: ruff check --target-version py312 --select E4,E7,E9,F main.py config core ui tests
 
-      - name: JavaScript syntax check
-        run: |
-          node --check ui/web/app.js
-          node --check ui/web/navigation.js
-          node --check ui/web/operations.js
+      - name: QML lint
+        run: pyside6-qmllint ui/qml/*.qml
 
-      - name: Test suite
-        run: python -m pytest tests -q
+      - name: QML load
+        run: python -m ui.validate
+
+      - name: OpenGL scene and Qt bundled shadow shaders
+        env:
+          QT_QPA_PLATFORM: xcb
+          QT_QUICK_BACKEND: rhi
+          QSG_RHI_BACKEND: opengl
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a python -m ui.validate --require-rhi
+
+      - name: Test suite including real D-Bus transport
+        run: dbus-run-session -- python -m pytest tests -q
 
   publish:
     if: >-

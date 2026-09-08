@@ -34,7 +34,7 @@ def test_shutdown_suppresses_late_worker_notifications(monkeypatch, tmp_path) ->
     started = threading.Event()
     release = threading.Event()
 
-    def slow_scraper(*, debug=False):
+    def slow_scraper(*, debug=False, **kwargs):
         started.set()
         release.wait(timeout=2)
         return [_event()]

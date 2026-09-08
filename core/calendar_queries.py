@@ -41,8 +41,9 @@ class CalendarQueryService:
                 )
             )
         events.sort(
-            key=lambda event: try_parse_utc(event.utc_dt)
-            or datetime.max.replace(tzinfo=timezone.utc)
+            key=lambda event: (
+                try_parse_utc(event.utc_dt) or datetime.max.replace(tzinfo=timezone.utc)
+            )
         )
         return events
 
@@ -72,7 +73,9 @@ class CalendarQueryService:
         refreshing = any(self._controller.is_refreshing(source) for source in sources)
 
         parsed = [(value, try_parse_utc(value)) for value in timestamps if value]
-        valid = [(value, parsed_dt) for value, parsed_dt in parsed if parsed_dt is not None]
+        valid = [
+            (value, parsed_dt) for value, parsed_dt in parsed if parsed_dt is not None
+        ]
         if valid:
             timestamp = min(valid, key=lambda item: item[1])[0]
         else:
@@ -80,6 +83,10 @@ class CalendarQueryService:
 
         if not any(origin != "empty" for origin in origins):
             origin = "empty"
+        elif any(origin == "empty" for origin in origins):
+            origin = "partial"
+        elif any(self._controller.get_source_error(source) for source in sources):
+            origin = "partial"
         elif any(origin == "cache" for origin in origins):
             origin = "cache"
         else:

@@ -9,17 +9,20 @@ from config.settings import Settings
 from core.app_controller import AppController
 from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
-from ui.bridge import CalendarBridge
-from ui.runtime import CalendarRuntime
+from core.calendar_view import CalendarViewService
 
 
 def _redirect_paths(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path / "config")
     monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(PathConfig, "SETTINGS_FILE", tmp_path / "config" / "settings.json")
+    monkeypatch.setattr(
+        PathConfig, "SETTINGS_FILE", tmp_path / "config" / "settings.json"
+    )
 
 
-def _future_event(source: CalendarSource = CalendarSource.FOREXFACTORY) -> CalendarEvent:
+def _future_event(
+    source: CalendarSource = CalendarSource.FOREXFACTORY,
+) -> CalendarEvent:
     event_dt = datetime.now(timezone.utc) + timedelta(hours=3)
     return CalendarEvent(
         time=event_dt.strftime("%H:%M"),
@@ -35,7 +38,7 @@ def _future_event(source: CalendarSource = CalendarSource.FOREXFACTORY) -> Calen
     )
 
 
-def test_controller_and_bridge_start_with_cached_data(monkeypatch, tmp_path) -> None:
+def test_controller_and_view_start_with_cached_data(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     refreshed_at = "2026-08-21T10:30:00+00:00"
     cache = CalendarCache()
@@ -43,18 +46,14 @@ def test_controller_and_bridge_start_with_cached_data(monkeypatch, tmp_path) -> 
 
     settings = Settings()
     controller = AppController(settings)
-    runtime = CalendarRuntime(controller, settings)
-    bridge = CalendarBridge(controller, settings, runtime)
+    view = CalendarViewService(controller, settings)
     try:
         assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "cache"
         assert controller.get_last_refresh(CalendarSource.FOREXFACTORY) == refreshed_at
 
-        initial = bridge.getInitialState()
-        source = next(item for item in initial["sources"] if item["key"] == "ig")
-        assert source["data_origin"] == "cache"
-        assert source["last_refresh_iso"] == refreshed_at
-
-        rows = bridge.getEvents("ig", "ALL", "ALL", "", 0.0)
+        snapshot = view.snapshot()
+        assert snapshot.status.startswith("Dati salvati")
+        rows = snapshot.rows
         assert len(rows) == 1
         assert rows[0]["event_name"] == "Offline cached event"
     finally:
@@ -92,7 +91,9 @@ def test_failed_refresh_keeps_cached_events_available(monkeypatch, tmp_path) -> 
         controller.shutdown()
 
 
-def test_successful_refresh_replaces_cache_and_uses_utc_timestamp(monkeypatch, tmp_path) -> None:
+def test_successful_refresh_replaces_cache_and_uses_utc_timestamp(
+    monkeypatch, tmp_path
+) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     controller = AppController(settings)

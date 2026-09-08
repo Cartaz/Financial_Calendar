@@ -7,7 +7,7 @@ import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Callable, Iterable
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from config.timezones import resolve_timezone
 
 from config.constants import CalendarDefaults
 from config.settings import Settings
@@ -49,6 +49,7 @@ class AppController:
         self._cache = CalendarCache()
         self._data_origin: dict[str, str] = {"ig": "empty", "fxstreet": "empty"}
         self._data_timestamp: dict[str, str] = {"ig": "", "fxstreet": ""}
+        self._errors: dict[str, str] = {"ig": "", "fxstreet": ""}
         self._load_cached_events()
 
     @staticmethod
@@ -110,7 +111,9 @@ class AppController:
         self._start_refresh(
             CalendarSource.FOREXFACTORY,
             self._refreshing_ig,
-            lambda: scrape_ig_calendar(debug=self._debug),
+            lambda: scrape_ig_calendar(
+                debug=self._debug, cancel_event=self._shutting_down
+            ),
             self._on_ig_refresh_done,
         )
 
@@ -118,7 +121,9 @@ class AppController:
         self._start_refresh(
             CalendarSource.FXSTREET,
             self._refreshing_fxstreet,
-            lambda: scrape_fxstreet_calendar(debug=self._debug),
+            lambda: scrape_fxstreet_calendar(
+                debug=self._debug, cancel_event=self._shutting_down
+            ),
             self._on_fxstreet_refresh_done,
         )
 
@@ -177,54 +182,45 @@ class AppController:
         source: CalendarSource,
         refreshing_flag: threading.Event,
     ) -> None:
-        refreshing_flag.clear()
-        if self._shutting_down.is_set():
-            return
-
         source_key = source.value
+        name = "calendar_refresh_error"
+        payload = {"source": source_key}
         try:
+            if self._shutting_down.is_set():
+                return
             events = future.result()
-        except Exception as exc:
-            logger.error("%s: errore refresh: %s", source_key, exc)
-            self._notify(
-                "calendar_refresh_error",
-                {
-                    "source": source_key,
-                    "error": str(exc),
-                    "data_origin": self.get_data_origin(source),
-                },
+            if not events:
+                raise ValueError("La sorgente non ha restituito eventi validi")
+            refreshed_at = datetime.now(timezone.utc).isoformat()
+            self._replace_source_state(
+                source, events, origin="network", timestamp=refreshed_at
             )
-            return
-
-        refreshed_at = datetime.now(timezone.utc).isoformat()
-        self._replace_source_state(
-            source,
-            events,
-            origin="network",
-            timestamp=refreshed_at,
-        )
-        refresh_key = (
-            "last_refresh_ig"
-            if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY)
-            else "last_refresh_fxstreet"
-        )
-
-        if not self._cache.save(source, list(events), refreshed_at):
-            logger.warning("%s: impossibile aggiornare la cache persistente", source_key)
-
-        if not self.settings.set(refresh_key, refreshed_at):
-            logger.warning("%s: impossibile persistere last refresh", source_key)
-
-        logger.info("%s: refresh completato, %d eventi", source_key, len(events))
-        self._notify(
-            "calendar_refreshed",
-            {
-                "source": source_key,
-                "count": len(events),
-                "timestamp": refreshed_at,
-                "data_origin": "network",
-            },
-        )
+            if not self._cache.save(source, list(events), refreshed_at):
+                logger.warning(
+                    "%s: impossibile aggiornare la cache persistente", source_key
+                )
+            key = (
+                "last_refresh_ig"
+                if source == CalendarSource.FOREXFACTORY
+                else "last_refresh_fxstreet"
+            )
+            if not self.settings.set(key, refreshed_at):
+                logger.warning("%s: impossibile persistere ultimo refresh", source_key)
+            with self._data_lock:
+                self._errors[source_key] = ""
+            name = "calendar_refreshed"
+            payload.update(
+                count=len(events), timestamp=refreshed_at, data_origin="network"
+            )
+            logger.info("%s: refresh completato, %d eventi", source_key, len(events))
+        except Exception as exc:
+            logger.exception("%s: errore refresh", source_key)
+            with self._data_lock:
+                self._errors[source_key] = str(exc)
+            payload.update(error=str(exc), data_origin=self.get_data_origin(source))
+        finally:
+            refreshing_flag.clear()
+        self._notify(name, payload)
 
     def filter_events(
         self,
@@ -284,41 +280,11 @@ class AppController:
 
     @staticmethod
     def _timezone_from_spec(timezone_name: str) -> tzinfo:
-        text = timezone_name.strip()
-        if not text or text.upper() == "UTC":
-            return timezone.utc
+        return resolve_timezone(timezone_name or "UTC")
 
-        upper = text.upper()
-        if upper.startswith("UTC") and len(text) > 3:
-            suffix = text[3:]
-            sign = 1
-            if suffix.startswith("+"):
-                suffix = suffix[1:]
-            elif suffix.startswith("-"):
-                sign = -1
-                suffix = suffix[1:]
-            else:
-                logger.warning("Timezone offset non valido %r, uso UTC", timezone_name)
-                return timezone.utc
-
-            try:
-                hours_text, minutes_text = suffix.split(":", 1)
-                hours = int(hours_text)
-                minutes = int(minutes_text)
-            except (TypeError, ValueError):
-                logger.warning("Timezone offset non valido %r, uso UTC", timezone_name)
-                return timezone.utc
-
-            if hours > 14 or minutes < 0 or minutes >= 60 or (hours == 14 and minutes):
-                logger.warning("Timezone offset fuori intervallo %r, uso UTC", timezone_name)
-                return timezone.utc
-            return timezone(sign * timedelta(hours=hours, minutes=minutes))
-
-        try:
-            return ZoneInfo(text)
-        except ZoneInfoNotFoundError:
-            logger.warning("Timezone IANA sconosciuta %r, uso UTC", timezone_name)
-            return timezone.utc
+    def get_source_error(self, source: CalendarSource) -> str:
+        with self._data_lock:
+            return self._errors[source.value]
 
     @staticmethod
     def _convert_events_to_zone(

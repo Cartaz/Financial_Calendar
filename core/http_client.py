@@ -1,29 +1,65 @@
-"""HTTP client configuration for resilient calendar requests."""
+"""HTTP with a wall-clock deadline and deterministic cancellation/reaping."""
 
 from __future__ import annotations
 
+import base64
+import json
+from pathlib import Path
+import subprocess
+import sys
+import threading
+import time
+from types import SimpleNamespace
+
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-_RETRY_STATUS = (429, 500, 502, 503, 504)
 
 
-def build_retry_session() -> requests.Session:
-    """Create a requests session with conservative retry/backoff behavior."""
-    retry = Retry(
-        total=2,
-        connect=2,
-        read=2,
-        status=2,
-        backoff_factor=0.5,
-        status_forcelist=_RETRY_STATUS,
-        allowed_methods=frozenset({"GET"}),
-        respect_retry_after_header=True,
-        raise_on_status=False,
-    )
-    adapter = HTTPAdapter(max_retries=retry, pool_connections=2, pool_maxsize=4)
-    session = requests.Session()
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    return session
+class CalendarHttpClient:
+    def get(
+        self,
+        url: str,
+        *,
+        cancel_event: threading.Event | None = None,
+        deadline_seconds: float = 35,
+        **options,
+    ) -> requests.Response:
+        if cancel_event is not None and cancel_event.is_set():
+            raise requests.ConnectionError("Richiesta annullata")
+        process = subprocess.Popen(
+            [sys.executable, str(Path(__file__).with_name("http_transport.py"))],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        deadline = time.monotonic() + deadline_seconds
+        data = json.dumps({"url": url, **options}).encode()
+        try:
+            while True:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise requests.ConnectionError("Richiesta annullata")
+                if time.monotonic() >= deadline:
+                    raise requests.Timeout("Scadenza totale HTTP superata")
+                try:
+                    stdout, stderr = process.communicate(input=data, timeout=0.1)
+                    break
+                except subprocess.TimeoutExpired:
+                    data = None
+            if process.returncode:
+                raise requests.ConnectionError(stderr.decode(errors="replace").strip())
+            payload = json.loads(stdout)
+            response = requests.Response()
+            response.status_code = payload["status"]
+            response._content = base64.b64decode(payload["body"])
+            response.url = url
+            response.raw = SimpleNamespace(
+                retries=SimpleNamespace(history=(None,) * payload["retries"])
+            )
+            return response
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.communicate()
+
+
+def build_retry_session() -> CalendarHttpClient:
+    return CalendarHttpClient()

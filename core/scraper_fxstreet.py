@@ -37,20 +37,63 @@ _VOLATILITY_MAP: dict[str, ImpactLevel] = {
 }
 
 _COUNTRY_MAP: dict[str, str] = {
-    "US": "USA", "EMU": "EUR", "UK": "GBP", "JP": "JPN",
-    "CH": "CHF", "CA": "CAD", "AU": "AUD", "NZ": "NZD",
-    "CN": "CNY", "DE": "EUR", "FR": "EUR", "IT": "EUR",
-    "ES": "EUR", "NL": "EUR", "BE": "EUR", "AT": "EUR",
-    "PT": "EUR", "IE": "EUR", "FI": "EUR", "GR": "EUR",
-    "SK": "EUR", "SI": "EUR", "EE": "EUR", "LV": "EUR",
-    "LT": "EUR", "LU": "EUR", "MT": "EUR", "CY": "EUR",
-    "IN": "INR", "KR": "KRW", "SG": "SGD", "HK": "HKD",
-    "TW": "TWD", "MX": "MXN", "BR": "BRL", "ZA": "ZAR",
-    "SE": "SEK", "NO": "NOK", "DK": "DKK", "PL": "PLN",
-    "CZ": "CZK", "HU": "HUF", "TR": "TRY", "RU": "RUB",
-    "TH": "THB", "MY": "MYR", "ID": "IDN", "PH": "PHP",
-    "AR": "ARS", "CL": "CLP", "CO": "COP", "EG": "EGP",
-    "IL": "ILS", "QA": "QAR", "RO": "RON", "AE": "AED", "SA": "SAR",
+    "US": "USA",
+    "EMU": "EUR",
+    "UK": "GBP",
+    "JP": "JPN",
+    "CH": "CHF",
+    "CA": "CAD",
+    "AU": "AUD",
+    "NZ": "NZD",
+    "CN": "CNY",
+    "DE": "EUR",
+    "FR": "EUR",
+    "IT": "EUR",
+    "ES": "EUR",
+    "NL": "EUR",
+    "BE": "EUR",
+    "AT": "EUR",
+    "PT": "EUR",
+    "IE": "EUR",
+    "FI": "EUR",
+    "GR": "EUR",
+    "SK": "EUR",
+    "SI": "EUR",
+    "EE": "EUR",
+    "LV": "EUR",
+    "LT": "EUR",
+    "LU": "EUR",
+    "MT": "EUR",
+    "CY": "EUR",
+    "IN": "INR",
+    "KR": "KRW",
+    "SG": "SGD",
+    "HK": "HKD",
+    "TW": "TWD",
+    "MX": "MXN",
+    "BR": "BRL",
+    "ZA": "ZAR",
+    "SE": "SEK",
+    "NO": "NOK",
+    "DK": "DKK",
+    "PL": "PLN",
+    "CZ": "CZK",
+    "HU": "HUF",
+    "TR": "TRY",
+    "RU": "RUB",
+    "TH": "THB",
+    "MY": "MYR",
+    "ID": "IDN",
+    "PH": "PHP",
+    "AR": "ARS",
+    "CL": "CLP",
+    "CO": "COP",
+    "EG": "EGP",
+    "IL": "ILS",
+    "QA": "QAR",
+    "RO": "RON",
+    "AE": "AED",
+    "SA": "SAR",
 }
 
 
@@ -122,7 +165,9 @@ def _extract_event_list(payload: object) -> list[dict]:
     )
 
 
-def scrape_fxstreet_calendar(debug: bool = False) -> list[CalendarEvent]:
+def scrape_fxstreet_calendar(
+    debug: bool = False, *, cancel_event=None
+) -> list[CalendarEvent]:
     """Fetch and validate the next seven UTC calendar days from FXStreet."""
     timer = RefreshTimer()
     today_utc = datetime.now(timezone.utc)
@@ -135,6 +180,7 @@ def scrape_fxstreet_calendar(debug: bool = False) -> list[CalendarEvent]:
             url,
             headers=_HEADERS,
             timeout=CalendarDefaults.HTTP_TIMEOUT,
+            cancel_event=cancel_event,
             params={"volatilities": ["LOW", "MEDIUM", "HIGH"]},
         )
         response.raise_for_status()

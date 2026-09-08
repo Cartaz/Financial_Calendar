@@ -39,14 +39,38 @@ _IMPACT_MAP: dict[str, ImpactLevel] = {
 }
 
 _COUNTRY_MAP: dict[str, str] = {
-    "USD": "USA", "EUR": "EUR", "JPY": "JPN", "GBP": "GBP",
-    "CHF": "CHF", "CAD": "CAD", "AUD": "AUD", "NZD": "NZD",
-    "CNY": "CNY", "KRW": "KRW", "SGD": "SGD", "HKD": "HKD",
-    "TWD": "TWD", "MXN": "MXN", "BRL": "BRL", "ZAR": "ZAR",
-    "SEK": "SEK", "NOK": "NOK", "DKK": "DKK", "PLN": "PLN",
-    "CZK": "CZK", "HUF": "HUF", "TRY": "TRY", "RUB": "RUB",
-    "THB": "THB", "MYR": "MYR", "IDR": "IDN", "PHP": "PHP",
-    "INR": "INR", "ILS": "ILS", "SAR": "SAR", "AED": "AED",
+    "USD": "USA",
+    "EUR": "EUR",
+    "JPY": "JPN",
+    "GBP": "GBP",
+    "CHF": "CHF",
+    "CAD": "CAD",
+    "AUD": "AUD",
+    "NZD": "NZD",
+    "CNY": "CNY",
+    "KRW": "KRW",
+    "SGD": "SGD",
+    "HKD": "HKD",
+    "TWD": "TWD",
+    "MXN": "MXN",
+    "BRL": "BRL",
+    "ZAR": "ZAR",
+    "SEK": "SEK",
+    "NOK": "NOK",
+    "DKK": "DKK",
+    "PLN": "PLN",
+    "CZK": "CZK",
+    "HUF": "HUF",
+    "TRY": "TRY",
+    "RUB": "RUB",
+    "THB": "THB",
+    "MYR": "MYR",
+    "IDR": "IDN",
+    "PHP": "PHP",
+    "INR": "INR",
+    "ILS": "ILS",
+    "SAR": "SAR",
+    "AED": "AED",
 }
 
 
@@ -63,9 +87,7 @@ def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
         try:
             impact_raw = item.get("impact", "Low")
             impact_text = (
-                impact_raw
-                if isinstance(impact_raw, str)
-                else str(impact_raw or "Low")
+                impact_raw if isinstance(impact_raw, str) else str(impact_raw or "Low")
             )
             impact = _IMPACT_MAP.get(impact_text, ImpactLevel.LOW)
 
@@ -101,7 +123,9 @@ def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
     return events
 
 
-def scrape_ig_calendar(debug: bool = False) -> list[CalendarEvent]:
+def scrape_ig_calendar(
+    debug: bool = False, *, cancel_event=None
+) -> list[CalendarEvent]:
     """Fetch and validate the ForexFactory/Faireconomy weekly calendar."""
     timer = RefreshTimer()
     try:
@@ -109,6 +133,7 @@ def scrape_ig_calendar(debug: bool = False) -> list[CalendarEvent]:
             _API_URL,
             headers=_HEADERS,
             timeout=CalendarDefaults.HTTP_TIMEOUT,
+            cancel_event=cancel_event,
         )
         response.raise_for_status()
     except requests.RequestException as exc:

@@ -15,7 +15,9 @@ _DUPLICATE_DICE_THRESHOLD = 0.72
 def _normalized_name(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", str(value or ""))
     ascii_like = "".join(char for char in normalized if not unicodedata.combining(char))
-    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", ascii_like.casefold())).strip()
+    return re.sub(
+        r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", ascii_like.casefold())
+    ).strip()
 
 
 def _bigram_dice(left: str, right: str) -> float:
@@ -72,7 +74,9 @@ def event_identity(event: CalendarEvent) -> tuple[str, str, str, str]:
     return (event.source.value, event.utc_dt, event.country, event.event_name)
 
 
-def build_duplicate_groups(events: list[CalendarEvent]) -> dict[tuple[str, str, str, str], str]:
+def build_duplicate_groups(
+    events: list[CalendarEvent],
+) -> dict[tuple[str, str, str, str], str]:
     """Group probable cross-source duplicates without dropping any event."""
     if len(events) < 2:
         return {}
@@ -92,10 +96,21 @@ def build_duplicate_groups(events: list[CalendarEvent]) -> dict[tuple[str, str, 
         if root_left != root_right:
             parents[root_right] = root_left
 
-    for left_index, left in enumerate(events):
-        for right_index in range(left_index + 1, len(events)):
-            if events_probably_duplicate(left, events[right_index]):
-                unite(left_index, right_index)
+    # Compare only records in the same country and fifteen-minute UTC window.
+    buckets: dict[str, list[tuple[float, int]]] = {}
+    for index, event in enumerate(events):
+        dt = try_parse_utc(event.utc_dt)
+        if dt is not None:
+            buckets.setdefault(event.country, []).append((dt.timestamp(), index))
+    for bucket in buckets.values():
+        bucket.sort()
+        for position, (stamp, left_index) in enumerate(bucket):
+            for other in range(position + 1, len(bucket)):
+                right_stamp, right_index = bucket[other]
+                if right_stamp - stamp > _DUPLICATE_WINDOW_SECONDS:
+                    break
+                if events_probably_duplicate(events[left_index], events[right_index]):
+                    unite(left_index, right_index)
 
     members: dict[int, list[CalendarEvent]] = {}
     for index, event in enumerate(events):

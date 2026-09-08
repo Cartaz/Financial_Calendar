@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -23,6 +24,7 @@ class NotificationPolicy:
         lead_minutes: int,
         *,
         now: datetime | None = None,
+        commit: bool = True,
     ) -> list[tuple[CalendarEvent, datetime, int]]:
         if lead_minutes <= 0:
             return []
@@ -32,6 +34,13 @@ class NotificationPolicy:
             current = current.replace(tzinfo=timezone.utc)
         current = current.astimezone(timezone.utc)
 
+        self._notified_events = [
+            event
+            for event in self._notified_events
+            if (dt := try_parse_utc(event.utc_dt)) is not None and dt >= current
+        ]
+        self._notified_keys = {event_identity(event) for event in self._notified_events}
+        selected = list(self._notified_events)
         candidates: list[tuple[CalendarEvent, datetime]] = []
         for event in events:
             if event.impact != ImpactLevel.HIGH:
@@ -49,12 +58,19 @@ class NotificationPolicy:
             key = event_identity(event)
             if key in self._notified_keys:
                 continue
-            self._notified_keys.add(key)
 
-            if any(events_probably_duplicate(event, previous) for previous in self._notified_events):
+            if any(events_probably_duplicate(event, previous) for previous in selected):
                 continue
 
-            self._notified_events.append(event)
-            remaining_minutes = max(1, int((event_dt - current).total_seconds() // 60) + 1)
+            selected.append(event)
+            if commit:
+                self.mark_delivered(event)
+            remaining_minutes = max(
+                1, math.ceil((event_dt - current).total_seconds() / 60)
+            )
             due.append((event, event_dt, remaining_minutes))
         return due
+
+    def mark_delivered(self, event: CalendarEvent) -> None:
+        self._notified_keys.add(event_identity(event))
+        self._notified_events.append(event)

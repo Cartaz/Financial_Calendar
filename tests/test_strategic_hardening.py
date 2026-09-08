@@ -5,8 +5,6 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QUrl
-from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
 from PySide6.QtWidgets import QApplication
 
 from config.constants import PathConfig
@@ -15,7 +13,6 @@ from core import scraper_fxstreet, scraper_ig
 from core.scraper_utils import save_debug_json
 from core.time_utils import try_parse_utc
 from ui.runtime import CalendarRuntime
-from ui.window import CalendarWindow, LocalOnlyPage
 
 
 class FakeController:
@@ -54,7 +51,9 @@ def test_debug_json_uses_canonical_application_data_path(monkeypatch, tmp_path) 
     assert json.loads(output.read_text(encoding="utf-8")) == {"ok": True}
 
 
-def test_scraper_parsers_skip_bad_records_but_surface_internal_bugs(monkeypatch) -> None:
+def test_scraper_parsers_skip_bad_records_but_surface_internal_bugs(
+    monkeypatch,
+) -> None:
     assert scraper_ig._parse_ff_events([None, {}]) == []
     assert scraper_fxstreet._parse_api_events([None, {}]) == []
 
@@ -100,47 +99,6 @@ def test_runtime_stop_is_idempotent_and_stops_owned_timers() -> None:
     assert runtime.started is False
     assert not runtime.auto_refresh_timer.isActive()
     assert not runtime.notification_timer.isActive()
-
-
-def test_webengine_navigation_and_settings_are_deny_by_default(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path / "config")
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(PathConfig, "SETTINGS_FILE", tmp_path / "config" / "settings.json")
-
-    app = QApplication.instance() or QApplication([])
-    assert app is not None
-
-    page = LocalOnlyPage()
-    navigation_type = QWebEnginePage.NavigationType.NavigationTypeOther
-    assert page.acceptNavigationRequest(QUrl("file:///tmp/example.html"), navigation_type, True)
-    assert page.acceptNavigationRequest(QUrl("qrc:///qtwebchannel/qwebchannel.js"), navigation_type, True)
-    assert not page.acceptNavigationRequest(QUrl("data:text/html,test"), navigation_type, True)
-    assert not page.acceptNavigationRequest(QUrl("custom-scheme:payload"), navigation_type, True)
-    page.deleteLater()
-
-    from core.app_controller import AppController
-
-    settings = Settings()
-    controller = AppController(settings)
-    window = CalendarWindow(controller, settings)
-    try:
-        web_settings = window.page.settings()
-        assert not web_settings.testAttribute(
-            QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls
-        )
-        assert not web_settings.testAttribute(
-            QWebEngineSettings.WebAttribute.NavigateOnDropEnabled
-        )
-        assert not web_settings.testAttribute(
-            QWebEngineSettings.WebAttribute.DnsPrefetchEnabled
-        )
-        assert web_settings.unknownUrlSchemePolicy() == (
-            QWebEngineSettings.UnknownUrlSchemePolicy.DisallowUnknownUrlSchemes
-        )
-    finally:
-        window.close()
-        app.processEvents()
-        controller.shutdown()
 
 
 def test_release_publish_is_gated_by_ci_and_has_no_branch_cleanup() -> None:

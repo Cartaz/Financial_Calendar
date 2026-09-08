@@ -1,4 +1,4 @@
-"""Qt runtime coordination kept separate from the QWebChannel transport bridge."""
+"""Qt runtime coordination kept separate from the QML presentation."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ class CalendarRuntime(QObject):
         settings: Settings,
         *,
         notifier: DesktopNotifier | None = None,
+        queue=None,
     ) -> None:
         super().__init__()
         self._controller = controller
@@ -31,6 +32,8 @@ class CalendarRuntime(QObject):
         self._notifier = notifier or DesktopNotifier()
         self._notification_policy = NotificationPolicy()
         self._started = False
+        self._queue = queue
+        self._checking = False
 
         self.auto_refresh_timer = QTimer(self)
         self.auto_refresh_timer.setSingleShot(False)
@@ -46,16 +49,24 @@ class CalendarRuntime(QObject):
         return self._started
 
     def configure_auto_refresh(self) -> None:
-        self.auto_refresh_timer.stop()
         minutes = int(self._settings.get("auto_refresh_minutes"))
+        if (
+            self._started
+            and self.auto_refresh_timer.isActive()
+            and self.auto_refresh_timer.interval() == minutes * 60000
+        ):
+            return
+        self.auto_refresh_timer.stop()
         if not self._started or minutes <= 0:
             return
         self.auto_refresh_timer.start(minutes * 60 * 1000)
         logger.info("Auto-refresh configurato ogni %d minuti", minutes)
 
     def configure_notifications(self) -> None:
-        self.notification_timer.stop()
         minutes = int(self._settings.get("high_notification_minutes"))
+        if self._started and minutes > 0 and self.notification_timer.isActive():
+            return
+        self.notification_timer.stop()
         if not self._started or minutes <= 0:
             return
         self.notification_timer.start()
@@ -68,27 +79,39 @@ class CalendarRuntime(QObject):
         if lead_minutes <= 0:
             return
 
-        events = []
-        for source in (CalendarSource.FOREXFACTORY, CalendarSource.FXSTREET):
-            events.extend(
-                self._controller.filter_events(
-                    source,
-                    region="ALL",
-                    impact="HIGH",
-                    timezone_name="UTC",
-                )
-            )
+        if self._checking:
+            return
+        self._checking = True
 
-        for event, event_dt, remaining_minutes in self._notification_policy.due_events(
-            events,
-            lead_minutes,
-        ):
-            title = f"Evento HIGH tra {remaining_minutes} min"
-            body = (
-                f"{event.country} · {event.event_name} · "
-                f"{event_dt.astimezone().strftime('%H:%M')}"
-            )
-            self._notifier.notify(title, body)
+        def work():
+            events = []
+            for source in (CalendarSource.FOREXFACTORY, CalendarSource.FXSTREET):
+                events.extend(
+                    self._controller.filter_events(
+                        source, region="ALL", impact="HIGH", timezone_name="UTC"
+                    )
+                )
+            for event, event_dt, remaining in self._notification_policy.due_events(
+                events, lead_minutes, commit=False
+            ):
+                if not self._started:
+                    break
+                title = f"Evento HIGH tra {remaining} min"
+                body = f"{event.country} · {event.event_name} · {event_dt.astimezone().strftime('%H:%M')}"
+                if self._notifier.notify(title, body):
+                    self._notification_policy.mark_delivered(event)
+
+        def done(value, error):
+            self._checking = False
+
+        if self._queue is not None:
+            self._queue.submit(work, done)
+        else:
+            # Standalone compatibility for non-window consumers; shell always queues.
+            try:
+                work()
+            finally:
+                done(None, None)
 
     def start(self) -> None:
         if self._started:

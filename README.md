@@ -1,137 +1,59 @@
 # Financial Calendar
 
-Applicazione desktop Python per i calendari economici **ForexFactory/Faireconomy** e **FXStreet**, con interfaccia HTML/CSS/JavaScript locale ospitata in Qt WebEngine.
+Calendari economici **ForexFactory/Faireconomy** e **FXStreet** in una finestra desktop QML nativa. Versione **1.1.0**.
 
-**Release stabile: 1.0.1**
+## Installazione e avvio
 
-La UI usa superfici `#141414` e `#FF6600` come unico colore accent.
-
-## Requisiti
-
-- Python 3.12+
-- Linux desktop
-- accesso a Internet per installare le dipendenze e aggiornare i calendari
-
-Dopo almeno un refresh riuscito, l'app può riaprire l'ultimo calendario valido anche temporaneamente senza rete grazie alla cache locale persistente.
-
-## Installazione
-
-Dalla root della repository:
+Richiede Linux desktop, Python 3.12+, Qt/PySide6 6.11 e librerie di sistema OpenGL/EGL. Su Ubuntu: `sudo apt install python3-venv libegl1 libgl1 libegl-mesa0 libgl1-mesa-dri`. Per le notifiche serve un session bus D-Bus con servizio Freedesktop Notifications.
 
 ```bash
 chmod +x install.sh
 ./install.sh
-```
-
-Lo script verifica Python 3.12+, crea o ripara la `.venv` locale, installa esclusivamente le dipendenze di `requirements.txt` e controlla gli import critici di requests, Qt, WebChannel e WebEngine.
-
-## Avvio
-
-```bash
 .venv/bin/python main.py
 ```
 
-Per il logging di debug:
+L'installer crea o ripara `.venv`, ripristina pip quando manca, installa `requirements.txt`, esegue il lint QML e carica la finestra con configurazione temporanea senza rete. `main.py --debug` abilita il logging dettagliato.
 
-```bash
-.venv/bin/python main.py --debug
-```
+## Funzioni
 
-## Struttura
-
-```text
-assets/       Icone e bandiere
-config/       Costanti e impostazioni persistenti
-core/         Dominio, controller, query, cache, export, policy e scraper
-tests/        Test automatici e fixture anonimizzate dei feed
-ui/           Shell Qt, runtime nativo e bridge QWebChannel
-ui/web/       Presentation locale HTML/CSS/JavaScript
-
-install.sh    Installazione locale nella .venv
-main.py       Entry point e wiring applicativo
-requirements.txt
-CHANGELOG.md  Cronologia delle release pubbliche
-```
-
-Le cartelle applicative principali sono `core`, `config`, `assets`, `tests` e `ui`; la presentation è confinata in `ui/web/`.
+- Sorgenti separate e vista **Tutti**, con indicazione dei probabili duplicati senza eliminare eventi.
+- Filtri per paese, impatto e data; ricerca; Oggi, Domani e Prossime 24 ore. I fusi `local`, `UTC`, IANA (es. `Europe/Rome`) e offset (es. `UTC+02:00`) sono risolti in Python, anche attraverso cambi DST.
+- Ordinamento cliccando le intestazioni; trascinamento delle colonne oppure **Alt+← / Alt+→** sull'intestazione selezionata. Filtri, ordinamento e colonne sono salvati per sorgente.
+- Refresh indipendente, freschezza per sorgente, cache persistente, avvio offline e dati precedenti conservati in caso di errore. La vista combinata segnala la disponibilità parziale.
+- Auto-refresh a 5/15/30/60 minuti; 0 disattiva. **Ctrl+R** aggiorna ForexFactory, **Ctrl+F** FXStreet.
+- Countdown e prossimo evento HIGH. Notifiche HIGH facoltative a 5/15/30/60 minuti: un evento viene registrato come notificato soltanto dopo una consegna riuscita.
+- CSV e ICS della vista Python effettivamente mostrata, nell'ordine visibile. CSV protegge le formule mantenendo i valori economici; ICS comunica il numero effettivo di eventi scritti.
+- Log consultabile e copiabile, limitato a 250 messaggi; geometria della finestra persistente. **X** e **Ctrl+Q** terminano l'applicazione; nessuna tray.
 
 ## Architettura
 
-```text
-config + core services/policies
-          ↓
-     AppController
-          ↓
-ui.runtime + native adapters
-          ↓
-ui.bridge / QWebChannel
-          ↓
-      ui/web/*
-```
+`main.py` collega `QApplication`, impostazioni, controller e finestra. `QQmlApplicationEngine` carica `ui/qml/Main.qml`.
 
-Python possiede dati operativi, rete, cache, persistenza, query combinate, policy di matching dei duplicati, policy delle notifiche, export e integrazione desktop. `CalendarBridge` espone soltanto un'API di trasporto e presentazione: valida gli input, delega ai servizi Python e serializza valori semplici per JavaScript. Il frontend mantiene esclusivamente stato temporaneo di presentazione, ricerca/navigazione locale del dataset ricevuto, ordinamento visivo e rendering.
+| Cartella | Responsabilità |
+| --- | --- |
+| `core/` | Dominio indipendente da Qt, scraper, cache, query, ordinamento, matching, export e policy notifiche |
+| `config/` | Validazione e persistenza atomica delle impostazioni; risoluzione dei fusi |
+| `ui/` | Modelli Qt, adapter mirati, runtime, lavoro asincrono, finestre native e shell |
+| `ui/qml/` | Presentazione, controlli semantici e tema condiviso |
+| `assets/` | Icone, bandiere e Noto Sans con licenza OFL |
+| `tests/` | Fixture dei feed, test di dominio, regressioni e interazione QML |
 
-Non viene avviato alcun server HTTP locale. Il contenuto WebEngine locale non può accedere direttamente a URL remoti; eventuali navigazioni HTTP(S) vengono consegnate al browser di sistema. Non viene eseguito JavaScript non attendibile.
+Il dataset resta nei modelli `QAbstractTableModel`/`QAbstractListModel`; QML riceve solo una piccola proiezione delle preferenze. Query, persistenza, matching, export e consegna notifiche lavorano fuori dal thread GUI. Le richieste HTTP sono isolate in processi brevi con scadenza totale di 35 secondi, risposta massima di 8 MiB, Retry-After limitato e annullamento alla chiusura. Il trasporto QtDBus è isolato con scadenza di 5 secondi. I processi vengono terminati e raccolti, senza shell.
 
-## Funzioni principali
+`Theme.qml` centralizza superficie `#141414`, accento `#ff6600`, testo, font e raggi 28/22/16/12. `RaisedSurface` usa `RectangularShadow` con `cached: false`; `InsetSurface` compone bordi interni. Non ci sono shader personalizzati da compilare: quelli di Qt accompagnano la stessa versione PySide6. Le celle non hanno effetti individuali. La tabella e il log virtualizzano e riutilizzano i delegate.
 
-- calendari ForexFactory/Faireconomy e FXStreet
-- vista combinata `Tutti` con filtri, colonne e ordinamento persistenti indipendenti
-- indicazione non distruttiva dei probabili duplicati tra le due sorgenti, calcolata da una policy canonica Python
-- refresh asincrono e indipendente per sorgente
-- auto-refresh configurabile: Manuale / 5 / 15 / 30 / 60 minuti
-- indicatore di freschezza indipendente per ciascuna sorgente
-- cache persistente dell'ultimo calendario valido per sorgente
-- avvio con dati salvati prima del refresh di rete
-- mantenimento degli ultimi dati reali se un refresh fallisce
-- funzionamento parziale quando una sorgente è disponibile e l'altra è in errore
-- timestamp di refresh interni in ISO-8601 UTC
-- metriche di refresh nel log: durata, raw, validi, scartati, retry e origine cache/rete
-- warning automatico quando almeno il 20% di un campione di almeno 5 record raw viene scartato dal parser
-- fixture anonimizzate basate sulla struttura reale dei payload di entrambe le API
-- filtri indipendenti per data, area e impatto
-- ricerca testuale locale su evento, paese, impatto e valori economici
-- filtri rapidi Tutti / Oggi / Domani / Prossime 24h
-- filtro Prossime 24h basato sui timestamp UTC reali, anche attraverso mezzanotte e cambi DST
-- countdown locale per gli eventi futuri
-- indicazione del prossimo evento HIGH e sua evidenziazione discreta
-- attenuazione degli eventi già trascorsi
-- notifiche desktop opzionali per eventi HIGH, configurabili a 5 / 15 / 30 / 60 minuti prima
-- notifiche Linux tramite lo standard Freedesktop D-Bus, senza modalità tray e senza processi `notify-send`
-- export CSV degli eventi attualmente visibili dopo filtri, ricerca e intervallo rapido
-- export ICS degli eventi visibili con timestamp UTC e UID stabili
-- conversione timezone DST-safe tramite zone IANA, con offset UTC fissi ancora disponibili
-- stato sorgente distinto tra dati aggiornati, dati salvati, dati non recenti e assenza di dati
-- ripristino della sorgente attiva, data, timezone, intervallo auto-refresh e preferenza notifiche
-- ordinamento e riordino persistente delle colonne, separato per sorgente e vista combinata
-- ripristino di dimensione e posizione della finestra
-- bandiere dei paesi
-- errori leggibili mantenendo visibili gli ultimi dati reali
-- log applicativo integrato
-- chiusura diretta con la X della finestra
-- UI contenuta nella finestra con scroll interno della tabella
+Le impostazioni e la cache mantengono i percorsi XDG precedenti. La geometria QWidget esistente viene importata una volta nel nuovo formato QML. Il frontend WebEngine è stato rimosso dopo un confronto su 81 combinazioni di sorgenti, filtri e fusi.
 
-## Release
-
-La cronologia delle release pubbliche è mantenuta in `CHANGELOG.md`. La release stabile corrente è `v1.0.1`, una release di manutenzione strategica che conserva le funzionalità della roadmap 1.0 e ne consolida architettura, ownership e confini.
-
-## Sviluppo e test
-
-Le dipendenze di sviluppo non sono mantenute in file di configurazione aggiuntivi. Per eseguire i controlli locali:
+## Verifiche
 
 ```bash
-.venv/bin/python -m pip install "pytest>=8.3,<9" "ruff>=0.12,<1"
+.venv/bin/python -m pip install 'pytest>=8.3,<9' 'ruff>=0.12,<1'
 .venv/bin/python -m compileall -q main.py config core ui tests
 .venv/bin/ruff check --target-version py312 --select E4,E7,E9,F main.py config core ui tests
-node --check ui/web/app.js
-node --check ui/web/navigation.js
-node --check ui/web/operations.js
-QT_QPA_PLATFORM=offscreen \
-QTWEBENGINE_DISABLE_SANDBOX=1 \
-QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --no-sandbox" \
-  .venv/bin/python -m pytest tests -q
+.venv/bin/pyside6-qmllint ui/qml/*.qml
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software .venv/bin/python -m ui.validate
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=rhi QSG_RHI_BACKEND=opengl LIBGL_ALWAYS_SOFTWARE=1 .venv/bin/python -m ui.validate --require-rhi
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software dbus-run-session -- .venv/bin/python -m pytest tests -q
 ```
 
-Le fixture dei feed usate dai test sono in `tests/fixtures/` e non vengono mai usate come dati di fallback runtime.
-
-Non sono necessari `pyproject.toml`, package metadata o altri sistemi di packaging Python.
+La CI esegue questi controlli su Python 3.12 e 3.14, incluso un vero servizio D-Bus privato e il caricamento con OpenGL. Il test D-Bus viene saltato solo quando non esiste una sessione di test. La verifica software non certifica ombre o accelerazione grafica: per questo esiste il controllo RHI separato. La pubblicazione della release su main dipende dal successo dei test.
