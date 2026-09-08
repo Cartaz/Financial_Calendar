@@ -10,7 +10,7 @@
 ### Affidabilità
 - Query, matching, salvataggi, export e notifiche fuori dal thread GUI; export dalla vista canonica Python.
 - Refresh protetto fino al completamento della persistenza, errori per sorgente e disponibilità parziale esplicita.
-- HTTP con scadenza totale, annullamento, limite alla risposta e Retry-After; consegna QtDBus con timeout.
+- HTTP con scadenza totale, annullamento, limite alla risposta e Retry-After; consegna D-Bus (Jeepney) con timeout.
 - Validazione robusta di fusi, minuti e timestamp; conteggio ICS effettivo, protezione CSV, notifiche confermate solo dopo consegna e memoria della policy potata.
 - Timer non rimandati dagli aggiornamenti della vista; installer ripara pip e verifica QML.
 - CI con compileall, Ruff, QML lint/load, RHI OpenGL, interazioni Qt e trasporto D-Bus reale su Python 3.12/3.14.

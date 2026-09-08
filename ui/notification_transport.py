@@ -1,43 +1,34 @@
-"""Isolated QtDBus call: typed Notify arguments and no GUI or tray."""
+"""Typed Freedesktop D-Bus call isolated by a five-second parent deadline."""
 
 import json
 import sys
-from PySide6.QtCore import QCoreApplication, QMetaObject, Qt, Q_ARG, Q_RETURN_ARG
-from PySide6.QtDBus import QDBusConnection, QDBusInterface
+from jeepney import DBusAddress, MessageType, new_method_call
+from jeepney.io.blocking import open_dbus_connection
 
 
 def main():
-    app = QCoreApplication([])
     name, icon, title, body, timeout = json.load(sys.stdin)
-    bus = QDBusConnection.sessionBus()
-    if not bus.isConnected():
-        raise RuntimeError("Session bus D-Bus non disponibile")
-    interface = QDBusInterface(
-        "org.freedesktop.Notifications",
+    address = DBusAddress(
         "/org/freedesktop/Notifications",
-        "org.freedesktop.Notifications",
-        bus,
+        bus_name="org.freedesktop.Notifications",
+        interface="org.freedesktop.Notifications",
     )
-    if not interface.isValid():
-        raise RuntimeError(interface.lastError().message())
-    interface.setTimeout(3000)
-    QMetaObject.invokeMethod(
-        interface,
+    # Explicit wire types work with daemons without Qt introspection annotations.
+    message = new_method_call(
+        address,
         "Notify",
-        Qt.DirectConnection,
-        Q_RETURN_ARG("uint"),
-        Q_ARG(str, name),
-        Q_ARG("uint", 0),
-        Q_ARG(str, icon),
-        Q_ARG(str, title),
-        Q_ARG(str, body),
-        Q_ARG("QStringList", []),
-        Q_ARG("QVariantMap", {}),
-        Q_ARG(int, timeout),
+        "susssasa{sv}i",
+        (name, 0, icon, title, body, [], {}, timeout),
     )
-    if interface.lastError().isValid():
-        raise RuntimeError(interface.lastError().message())
-    del app
+    connection = open_dbus_connection(bus="SESSION")
+    try:
+        reply = connection.send_and_get_reply(message, timeout=3)
+        if reply.header.message_type == MessageType.error:
+            raise RuntimeError(str(reply.body))
+        if not reply.body or type(reply.body[0]) is not int:
+            raise RuntimeError("Risposta di consegna D-Bus non valida")
+    finally:
+        connection.close()
 
 
 if __name__ == "__main__":

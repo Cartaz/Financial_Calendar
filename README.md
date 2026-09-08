@@ -38,7 +38,7 @@ L'installer crea o ripara `.venv`, ripristina pip quando manca, installa `requir
 | `assets/` | Icone, bandiere e Noto Sans con licenza OFL |
 | `tests/` | Fixture dei feed, test di dominio, regressioni e interazione QML |
 
-Il dataset resta nei modelli `QAbstractTableModel`/`QAbstractListModel`; QML riceve solo una piccola proiezione delle preferenze. Query, persistenza, matching, export e consegna notifiche lavorano fuori dal thread GUI. Le richieste HTTP sono isolate in processi brevi con scadenza totale di 35 secondi, risposta massima di 8 MiB, Retry-After limitato e annullamento alla chiusura. Il trasporto QtDBus è isolato con scadenza di 5 secondi. I processi vengono terminati e raccolti, senza shell.
+Il dataset resta nei modelli `QAbstractTableModel`/`QAbstractListModel`; QML riceve solo una piccola proiezione delle preferenze. Query, persistenza, matching, export e consegna notifiche lavorano fuori dal thread GUI. Le richieste HTTP sono isolate in processi brevi con scadenza totale di 35 secondi, risposta massima di 8 MiB, Retry-After limitato e annullamento alla chiusura. Il trasporto D-Bus (Jeepney) è isolato con scadenza di 5 secondi. I processi vengono terminati e raccolti, senza shell.
 
 `Theme.qml` centralizza superficie `#141414`, accento `#ff6600`, testo, font e raggi 28/22/16/12. `RaisedSurface` usa `RectangularShadow` con `cached: false`; `InsetSurface` compone bordi interni. Non ci sono shader personalizzati da compilare: quelli di Qt accompagnano la stessa versione PySide6. Le celle non hanno effetti individuali. La tabella e il log virtualizzano e riutilizzano i delegate.
 

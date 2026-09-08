@@ -110,6 +110,13 @@ class CalendarAdapter(QObject):
             lambda: self.service.move_column(source, old, new), self._received
         )
 
+    @Slot("QVariantList")
+    def setColumnPositions(self, positions):
+        source = self._view.state["active_source"] if self._view else "ig"
+        self.queue.submit(
+            lambda: self.service.set_column_positions(source, positions), self._received
+        )
+
     @Slot(str)
     def refresh(self, source):
         if source == "combined":

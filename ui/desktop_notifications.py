@@ -1,4 +1,4 @@
-"""Freedesktop QtDBus notifications, bounded and invoked on the worker queue."""
+"""Typed Freedesktop D-Bus notifications, bounded and invoked on the worker queue."""
 
 import json
 import logging

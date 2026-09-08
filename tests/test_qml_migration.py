@@ -6,7 +6,13 @@ import json
 import time
 
 import pytest
-from PySide6.QtCore import QObject, qInstallMessageHandler, QtMsgType
+from PySide6.QtCore import (
+    QObject,
+    QMetaObject,
+    Q_ARG,
+    qInstallMessageHandler,
+    QtMsgType,
+)
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 from config.constants import PathConfig
@@ -173,7 +179,9 @@ def test_qml_models_interaction_export_and_geometry(app, backend, tmp_path):
         spin(app, lambda: window.calendar.count == 2 and not window.calendar.busy)
         assert window.calendar.table.columnCount() == 10
         assert all(row["duplicate_group"] for row in window.calendar.table.rows)
-        window.calendar.moveColumn(4, 0)
+        assert QMetaObject.invokeMethod(
+            table, "moveColumn", Q_ARG(int, 4), Q_ARG(int, 0)
+        )
         spin(
             app,
             lambda: (

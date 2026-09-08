@@ -40,7 +40,10 @@ class CalendarWindow(QObject):
         self.log_handler.setLevel(logging.DEBUG if debug else logging.INFO)
         self.log_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
         logging.getLogger().addHandler(self.log_handler)
-        self.runtime = CalendarRuntime(controller, settings, queue=self.queue)
+        self.notification_queue = WorkQueue(self)
+        self.runtime = CalendarRuntime(
+            controller, settings, queue=self.notification_queue
+        )
         self.calendar.accepted.connect(self.runtime.configure_auto_refresh)
         self.calendar.accepted.connect(self.runtime.configure_notifications)
         self.engine = QQmlApplicationEngine(self)
@@ -142,9 +145,11 @@ class CalendarWindow(QObject):
 
             self.queue.submit(save_geometry, lambda value, error: None)
         self.queue.begin_shutdown()
+        self.notification_queue.begin_shutdown()
 
     def shutdown(self):
         self.stop()
         self.controller.shutdown()
         self.queue.shutdown()
+        self.notification_queue.shutdown()
         logging.getLogger().removeHandler(self.log_handler)

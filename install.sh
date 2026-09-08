@@ -58,6 +58,10 @@ fi
 echo "[3/3] Verifica runtime critico..."
 if ! "${VENV_DIR}/bin/python" - <<'PY'
 import requests
+import sys
+if sys.platform.startswith("linux"):
+    import jeepney
+    assert jeepney.__version__
 from PySide6.QtCore import qVersion
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow

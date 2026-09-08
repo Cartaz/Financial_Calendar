@@ -50,7 +50,9 @@ def test_notify_has_freedesktop_signature_and_delivery_reply():
                 break
             QTest.qWait(10)
         assert process.state() == QProcess.NotRunning
-        assert received and received[0][0] == "susssasa{sv}i", bytes(process.readAllStandardError()).decode()
+        assert received and received[0][0] == "susssasa{sv}i", bytes(
+            process.readAllStandardError()
+        ).decode()
         assert received[0][1][3:5] == ["Test", "Body"]
         assert process.exitCode() == 0, bytes(process.readAllStandardError()).decode()
     finally:

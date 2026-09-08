@@ -177,6 +177,14 @@ class CalendarViewService:
                 self.quick_range = "manual" if value else "all"
         return self.snapshot()
 
+    def set_column_positions(self, source: str, positions: list[int]) -> CalendarView:
+        order = self.settings.get(f"{source}_column_order")
+        if any(type(i) is not int for i in positions) or sorted(positions) != list(
+            range(len(order))
+        ):
+            raise ValueError("Ordine colonne non valido")
+        return self.change("column_order", [order[i] for i in positions], source=source)
+
     def move_column(self, source: str, old: int, new: int) -> CalendarView:
         if source not in SOURCES:
             raise ValueError("Sorgente non valida")

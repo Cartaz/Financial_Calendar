@@ -155,10 +155,21 @@ ApplicationWindow {
                 clip: true
                 reuseItems: true
                 property bool resettingOrder: false
-                onColumnMoved: (logicalIndex, oldVisualIndex, newVisualIndex) => { if (!resettingOrder) root.calendar.moveColumn(oldVisualIndex, newVisualIndex) }
+                onColumnMoved: { if (!resettingOrder) orderDelay.restart() }
+                Timer {
+                    id: orderDelay
+                    interval: 0
+                    onTriggered: {
+                        let positions = []
+                        for (let i = 0; i < header.columns; ++i)
+                            positions.push(header.modelIndex(Qt.point(i, 0)).column)
+                        root.calendar.setColumnPositions(positions)
+                    }
+                }
                 Connections {
                     target: root.calendar
                     function onAccepted() {
+                        orderDelay.stop()
                         table.resettingOrder = true
                         table.clearColumnReordering()
                         table.resettingOrder = false
