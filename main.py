@@ -1,4 +1,4 @@
-"""Financial Calendar desktop entry point with an HTML/CSS/JavaScript UI."""
+"""Financial Calendar desktop entry point with a native QML UI."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from PySide6.QtWidgets import QApplication
 from config.constants import AppMeta, PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
-from ui.bridge import WebLogHandler
 from ui.window import CalendarWindow
 
 
@@ -51,20 +50,11 @@ def main() -> int:
         settings.save()
         return 1
 
-    app.aboutToQuit.connect(window.runtime.stop)
-
-    web_log_handler = WebLogHandler(window.bridge)
-    web_log_handler.setLevel(logging.DEBUG if args.debug else logging.INFO)
-    web_log_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
-    logging.getLogger().addHandler(web_log_handler)
-
     window.show()
-    exit_code = app.exec()
-
-    logging.getLogger().removeHandler(web_log_handler)
-    controller.shutdown()
-    settings.save()
-    return exit_code
+    try:
+        return app.exec()
+    finally:
+        window.shutdown()
 
 
 if __name__ == "__main__":

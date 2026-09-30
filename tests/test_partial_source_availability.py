@@ -45,13 +45,15 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
     monkeypatch.setattr(
         app_controller_module,
         "scrape_ig_calendar",
-        lambda debug=False: [_future_event()],
+        lambda debug=False, **kwargs: [_future_event()],
     )
 
-    def fail_fxstreet(debug=False):
+    def fail_fxstreet(debug=False, **kwargs):
         raise RuntimeError("FXStreet unavailable")
 
-    monkeypatch.setattr(app_controller_module, "scrape_fxstreet_calendar", fail_fxstreet)
+    monkeypatch.setattr(
+        app_controller_module, "scrape_fxstreet_calendar", fail_fxstreet
+    )
 
     controller = AppController(Settings())
     notifications: list[tuple[str, dict]] = []
@@ -88,8 +90,7 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
         failed = [
             payload
             for name, payload in notifications
-            if name == "calendar_refresh_error"
-            and payload.get("source") == "fxstreet"
+            if name == "calendar_refresh_error" and payload.get("source") == "fxstreet"
         ]
         assert len(refreshed) == 1
         assert refreshed[0]["count"] == 1

@@ -30,7 +30,10 @@ def try_parse_aware_iso(value: object) -> datetime | None:
 def try_parse_utc(value: object) -> datetime | None:
     """Parse an aware ISO-8601 value and normalize it to UTC, or return None."""
     parsed = try_parse_aware_iso(value)
-    return None if parsed is None else parsed.astimezone(timezone.utc)
+    try:
+        return None if parsed is None else parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return None
 
 
 def parse_aware_iso_datetime(value: object, field_name: str = "timestamp") -> datetime:
@@ -46,9 +49,7 @@ def parse_aware_iso_datetime(value: object, field_name: str = "timestamp") -> da
         raise ScraperParseError(f"{field_name} non valido: {text}") from exc
 
     if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ScraperParseError(
-            f"{field_name} privo di timezone esplicita: {text}"
-        )
+        raise ScraperParseError(f"{field_name} privo di timezone esplicita: {text}")
     return parsed
 
 

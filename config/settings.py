@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from config.constants import CalendarDefaults, PathConfig
+from config.timezones import validate_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ _SETTINGS_FIELDS = {item.name for item in fields(UserSettings)}
 def _valid_column_order(value: object, count: int) -> list[int]:
     if not isinstance(value, list):
         raise ValueError("column order must be a list")
-    if any(not isinstance(item, int) for item in value):
+    if any(type(item) is not int for item in value):
         raise ValueError("column order must contain integers")
     if sorted(value) != list(range(count)):
         raise ValueError("column order must be a complete permutation")
@@ -104,12 +105,7 @@ def _valid_column_order(value: object, count: int) -> list[int]:
 
 
 def _normalize_timezone(value: object) -> str:
-    text = str(value).strip()
-    if not text:
-        return "local"
-    if len(text) > 128 or any(ord(char) < 32 for char in text):
-        raise ValueError("invalid timezone value")
-    return text
+    return validate_timezone(value)
 
 
 def _normalize_selected_date(value: object) -> str:
@@ -128,8 +124,10 @@ def _normalize_minutes(value: object, allowed: set[int], label: str) -> int:
         raise ValueError(f"{label} must be an integer")
     try:
         minutes = int(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{label} must be an integer") from exc
+    if isinstance(value, float) and value != minutes:
+        raise ValueError(f"{label} must be an integer")
     if minutes not in allowed:
         raise ValueError(f"unsupported {label} interval")
     return minutes
@@ -170,7 +168,9 @@ def _normalize_setting(key: str, value: Any) -> Any:
         return _normalize_minutes(value, _AUTO_REFRESH_MINUTES, "auto refresh")
 
     if key == "high_notification_minutes":
-        return _normalize_minutes(value, _NOTIFICATION_LEAD_MINUTES, "notification lead")
+        return _normalize_minutes(
+            value, _NOTIFICATION_LEAD_MINUTES, "notification lead"
+        )
 
     if key == "ig_sort_key":
         text = str(value)
@@ -184,7 +184,11 @@ def _normalize_setting(key: str, value: Any) -> Any:
         text = str(value)
         return text if text in _COMBINED_SORT_KEYS else ""
 
-    if key in {"ig_sort_direction", "fxstreet_sort_direction", "combined_sort_direction"}:
+    if key in {
+        "ig_sort_direction",
+        "fxstreet_sort_direction",
+        "combined_sort_direction",
+    }:
         text = str(value)
         return text if text in {"asc", "desc"} else "asc"
 
@@ -208,7 +212,9 @@ class Settings:
         with self._lock:
             try:
                 if not PathConfig.SETTINGS_FILE.exists():
-                    logger.info("Nessun file impostazioni trovato, uso valori predefiniti")
+                    logger.info(
+                        "Nessun file impostazioni trovato, uso valori predefiniti"
+                    )
                     return
 
                 with open(PathConfig.SETTINGS_FILE, "r", encoding="utf-8") as handle:
@@ -242,7 +248,13 @@ class Settings:
 
                 self._data = UserSettings(**normalized)
                 logger.info("Impostazioni caricate da %s", PathConfig.SETTINGS_FILE)
-            except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            except (
+                OSError,
+                json.JSONDecodeError,
+                TypeError,
+                ValueError,
+                RecursionError,
+            ) as exc:
                 logger.warning(
                     "Impossibile caricare le impostazioni, uso default: %s",
                     exc,
@@ -276,7 +288,7 @@ class Settings:
                 try:
                     temp_path.unlink(missing_ok=True)
                 except OSError:
-                    pass
+                    logger.exception("Impossibile eliminare il file temporaneo")
             return False
 
     def save(self) -> bool:
@@ -301,7 +313,9 @@ class Settings:
         if unknown:
             raise AttributeError(f"Impostazione sconosciuta: {sorted(unknown)[0]}")
 
-        normalized = {key: _normalize_setting(key, value) for key, value in values.items()}
+        normalized = {
+            key: _normalize_setting(key, value) for key, value in values.items()
+        }
         changed: dict[str, tuple[Any, Any]] = {}
         with self._lock:
             for key, value in normalized.items():

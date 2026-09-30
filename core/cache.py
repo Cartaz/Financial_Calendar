@@ -14,6 +14,7 @@ from pathlib import Path
 from config.constants import PathConfig
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_metrics import ScrapeMetrics
+from core.time_utils import try_parse_utc
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,10 @@ def _event_from_dict(value: object, expected_source: CalendarSource) -> Calendar
     if not event_name:
         raise ValueError("cached event name missing")
 
+    utc_text = str(value.get("utc_dt", ""))
+    if utc_text and try_parse_utc(utc_text) is None:
+        raise ValueError("cached event timestamp invalid")
+
     return CalendarEvent(
         time=str(value.get("time", "")),
         country=str(value.get("country", "")),
@@ -112,7 +117,14 @@ class CalendarCache:
 
                 refreshed_at = _normalize_utc_timestamp(payload.get("refreshed_at"))
                 events = tuple(_event_from_dict(item, source) for item in raw_events)
-            except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            except (
+                OSError,
+                json.JSONDecodeError,
+                TypeError,
+                ValueError,
+                OverflowError,
+                RecursionError,
+            ) as exc:
                 logger.warning("Cache %s ignorata: %s", source.value, exc)
                 return None
 
@@ -145,7 +157,7 @@ class CalendarCache:
 
         try:
             normalized_timestamp = _normalize_utc_timestamp(refreshed_at)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             logger.error("Cache %s non salvata: %s", source.value, exc)
             return False
 
@@ -169,7 +181,9 @@ class CalendarCache:
                     delete=False,
                 ) as handle:
                     temp_path = Path(handle.name)
-                    json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
+                    json.dump(
+                        payload, handle, ensure_ascii=False, separators=(",", ":")
+                    )
                     handle.flush()
                     os.fsync(handle.fileno())
 
@@ -180,7 +194,7 @@ class CalendarCache:
                     try:
                         temp_path.unlink(missing_ok=True)
                     except OSError:
-                        pass
+                        logger.exception("Impossibile eliminare cache temporanea")
                 return False
 
         logger.debug("Cache %s salvata con %d eventi", source.value, len(events))

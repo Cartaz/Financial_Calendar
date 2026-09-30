@@ -49,20 +49,27 @@ else
 fi
 
 echo "[2/3] Installazione dipendenze..."
+if ! "${VENV_DIR}/bin/python" -m pip --version >/dev/null 2>&1; then
+    "${VENV_DIR}/bin/python" -m ensurepip --upgrade
+fi
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip
 "${VENV_DIR}/bin/python" -m pip install -r "${SCRIPT_DIR}/requirements.txt"
 
 echo "[3/3] Verifica runtime critico..."
 if ! "${VENV_DIR}/bin/python" - <<'PY'
 import requests
+import sys
+if sys.platform.startswith("linux"):
+    import jeepney
+    assert jeepney.__version__
 from PySide6.QtCore import qVersion
-from PySide6.QtWebChannel import QWebChannel
-from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuick import QQuickWindow
 
 assert requests.__version__
-assert qVersion()
-assert QWebChannel
-assert QWebEngineView
+assert tuple(map(int, qVersion().split("."))) >= (6, 11, 0)
+assert QQmlApplicationEngine
+assert QQuickWindow
 PY
 then
     echo "ERRORE: verifica degli import critici fallita."
@@ -70,5 +77,8 @@ then
 fi
 
 echo
+"${VENV_DIR}/bin/pyside6-qmllint" ui/qml/*.qml
+"${VENV_DIR}/bin/python" -m ui.validate
+
 echo "Installazione completata."
 echo "Avvio: .venv/bin/python main.py"

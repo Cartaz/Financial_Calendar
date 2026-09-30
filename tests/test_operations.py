@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import time
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtTest import QTest
 
 from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
-from ui.bridge import CalendarBridge
+from core.calendar_view import CalendarViewService
 from ui.runtime import CalendarRuntime
 
 
@@ -53,7 +55,9 @@ def _seed(source: CalendarSource, events: list[CalendarEvent]) -> None:
     )
 
 
-def test_combined_source_merges_and_annotates_real_events(monkeypatch, tmp_path) -> None:
+def test_combined_source_merges_and_annotates_real_events(
+    monkeypatch, tmp_path
+) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     _seed(
         CalendarSource.FOREXFACTORY,
@@ -65,27 +69,27 @@ def test_combined_source_merges_and_annotates_real_events(monkeypatch, tmp_path)
     )
     settings = Settings()
     controller = AppController(settings)
-    runtime = CalendarRuntime(controller, settings, notifier=FakeNotifier())
-    bridge = CalendarBridge(controller, settings, runtime)
+    view = CalendarViewService(controller, settings)
     try:
-        rows = bridge.getEventsInTimezone("combined", "USA", "HIGH", "", "Europe/Rome")
+        view.change("active_source", "combined")
+        view.change("region", "USA", source="combined")
+        view.change("impact", "HIGH", source="combined")
+        rows = view.change("timezone_name", "Europe/Rome").rows
         assert len(rows) == 2
         assert {row["source"] for row in rows} == {"ig", "fxstreet"}
         assert {row["duplicate_group"] for row in rows} == {"D1"}
-
-        assert bridge.saveFilters("combined", "USA", "HIGH")
-        assert bridge.saveSort("combined", "source", "desc")
-        assert bridge.saveUiState("combined", "Europe/Rome", "", 15)
-        initial = bridge.getInitialState()
-        sources = {source["key"]: source for source in initial["sources"]}
-        assert sources["combined"]["selected_region"] == "USA"
-        assert sources["combined"]["sort_key"] == "source"
-        assert initial["ui_state"]["active_source"] == "combined"
+        view.change("sort", "source", source="combined")
+        initial = view.snapshot()
+        assert initial.state["region"] == "USA"
+        assert initial.state["sort_key"] == "source"
+        assert initial.state["active_source"] == "combined"
     finally:
         controller.shutdown()
 
 
-def test_high_notifications_are_optional_and_deduplicated_across_sources(monkeypatch, tmp_path) -> None:
+def test_high_notifications_are_optional_and_deduplicated_across_sources(
+    monkeypatch, tmp_path
+) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     app = QApplication.instance() or QApplication([])
     assert app is not None
@@ -103,12 +107,17 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(monkeyp
     controller.refresh_all = lambda: None
     notifier = FakeNotifier()
     runtime = CalendarRuntime(controller, settings, notifier=notifier)
-    bridge = CalendarBridge(controller, settings, runtime)
+    view = CalendarViewService(controller, settings)
     try:
-        assert bridge.saveNotificationLead(5)
+        view.change("high_notification_minutes", 5)
+        runtime.configure_notifications()
         assert notifier.messages == []
 
-        bridge.start()
+        runtime.start()
+        deadline = time.monotonic() + 2
+        while runtime._checking and time.monotonic() < deadline:
+            app.processEvents()
+            QTest.qWait(5)
         assert len(notifier.messages) == 1
         title, body = notifier.messages[0]
         assert "Evento HIGH" in title
@@ -119,7 +128,9 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(monkeyp
         runtime.check_notifications()
         assert len(notifier.messages) == 1
 
-        assert bridge.saveNotificationLead(0)
+        view.change("high_notification_minutes", 0)
+        runtime.configure_notifications()
         assert not runtime.notification_timer.isActive()
     finally:
+        runtime.shutdown()
         controller.shutdown()

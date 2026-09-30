@@ -6,6 +6,7 @@ import csv
 import hashlib
 import io
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,13 +35,27 @@ def _text(value: object) -> str:
     return "" if value is None else str(value)
 
 
+def _csv_text(value: object) -> str:
+    text = _text(value)
+    # Preserve ordinary negative numbers, protect untrusted spreadsheet expressions.
+    stripped = text.lstrip()
+    numeric = re.fullmatch(
+        r"[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[%KMBT])?", stripped, re.I
+    )
+    if (stripped.startswith(("=", "+", "-", "@")) and not numeric) or text.startswith(
+        ("\t", "\r", "\n")
+    ):
+        return "'" + text
+    return text
+
+
 def render_csv(events: Iterable[Mapping[str, object]]) -> str:
     """Render events as a UTF-8 CSV document."""
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=CSV_COLUMNS, lineterminator="\n")
     writer.writeheader()
     for event in events:
-        writer.writerow({key: _text(event.get(key, "")) for key in CSV_COLUMNS})
+        writer.writerow({key: _csv_text(event.get(key, "")) for key in CSV_COLUMNS})
     return output.getvalue()
 
 
@@ -135,7 +150,9 @@ def render_ics(
         )
         duplicate_group = _text(event.get("duplicate_group"))
         if duplicate_group:
-            lines.append(f"X-FINANCIAL-CALENDAR-DUPLICATE-GROUP:{_ics_escape(duplicate_group)}")
+            lines.append(
+                f"X-FINANCIAL-CALENDAR-DUPLICATE-GROUP:{_ics_escape(duplicate_group)}"
+            )
         lines.append("END:VEVENT")
 
     lines.append("END:VCALENDAR")
@@ -154,6 +171,11 @@ def write_export(
     if export_format == "csv":
         content = render_csv(event_list)
     elif export_format == "ics":
+        event_list = [
+            event
+            for event in event_list
+            if try_parse_utc(event.get("utc_dt")) is not None
+        ]
         content = render_ics(event_list)
     else:
         raise ValueError(f"Formato export non supportato: {export_format}")
