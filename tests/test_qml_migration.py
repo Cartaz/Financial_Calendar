@@ -229,3 +229,178 @@ def test_timers_are_not_postponed_by_snapshot_updates(app, backend):
         window.shutdown()
         window.engine.deleteLater()
         app.processEvents()
+
+
+def test_settings_focus_does_not_convert_relative_range_to_fixed_date(app, backend):
+    window = CalendarWindow(*backend, autostart=False)
+    try:
+        window.show()
+        spin(app, lambda: window.calendar.count == 100 and not window.calendar.busy)
+        window.calendar.setFilter("range", "today")
+        spin(
+            app,
+            lambda: (
+                window.calendar.state["quick_range"] == "today"
+                and not window.calendar.busy
+            ),
+        )
+        popup = window.root.findChild(QObject, "settingsPopup")
+        assert popup is not None
+        assert QMetaObject.invokeMethod(popup, "open")
+        field = window.root.findChild(QObject, "dateField")
+        assert field is not None
+        field.forceActiveFocus()
+        QTest.qWait(30)
+        window.root.findChild(QObject, "timezoneField").forceActiveFocus()
+        QTest.qWait(30)
+        spin(app, lambda: not window.calendar.busy)
+        assert window.calendar.state["quick_range"] == "today"
+        assert backend[1].get("selected_date") == ""
+    finally:
+        window.root.close()
+        window.shutdown()
+        window.engine.deleteLater()
+        app.processEvents()
+
+
+def test_header_mouse_drag_persists_visual_order(app, backend):
+    from PySide6.QtCore import QPointF, Qt
+
+    def visual_item(parent, name):
+        if parent.objectName() == name:
+            return parent
+        for child in parent.childItems():
+            found = visual_item(child, name)
+            if found is not None:
+                return found
+        return None
+
+    window = CalendarWindow(*backend, autostart=False)
+    try:
+        window.show()
+        spin(app, lambda: window.calendar.count == 100 and not window.calendar.busy)
+        QTest.qWait(50)
+        first = visual_item(window.root.contentItem(), "headerCell0")
+        third = visual_item(window.root.contentItem(), "headerCell2")
+        assert first is not None and third is not None
+        origin = first.mapToScene(
+            QPointF(first.width() / 2, first.height() / 2)
+        ).toPoint()
+        target = third.mapToScene(
+            QPointF(third.width() / 2, third.height() / 2)
+        ).toPoint()
+        QTest.mousePress(window.root, Qt.LeftButton, Qt.NoModifier, origin)
+        for step in range(1, 11):
+            point = origin + (target - origin) * (step / 10)
+            QTest.mouseMove(window.root, point, delay=20)
+        QTest.mouseRelease(window.root, Qt.LeftButton, Qt.NoModifier, target)
+        QTest.qWait(100)
+        spin(
+            app,
+            lambda: (
+                window.calendar.table.columns[2] == "date" and not window.calendar.busy
+            ),
+        )
+        assert backend[1].get("ig_column_order")[:3] == [1, 2, 0]
+        assert window.calendar.state["sort_key"] == ""
+        date_cell = visual_item(window.root.contentItem(), "headerCell2")
+        date_cell.forceActiveFocus()
+        QTest.keyClick(window.root, Qt.Key_Left, Qt.AltModifier)
+        spin(
+            app,
+            lambda: (
+                window.calendar.table.columns[1] == "date" and not window.calendar.busy
+            ),
+        )
+        assert backend[1].get("ig_column_order")[:3] == [1, 0, 2]
+        window.calendar.selectSource("fxstreet")
+        spin(
+            app,
+            lambda: (
+                window.calendar.state["active_source"] == "fxstreet"
+                and not window.calendar.busy
+            ),
+        )
+        window.calendar.selectSource("ig")
+        spin(
+            app,
+            lambda: (
+                window.calendar.state["active_source"] == "ig"
+                and not window.calendar.busy
+            ),
+        )
+        assert window.calendar.table.columns[1] == "date"
+    finally:
+        window.root.close()
+        window.shutdown()
+        window.engine.deleteLater()
+        app.processEvents()
+
+
+def test_settings_edits_validate_and_keep_canonical_date(app, backend):
+    from PySide6.QtCore import Qt
+
+    window = CalendarWindow(*backend, autostart=False)
+    try:
+        window.show()
+        spin(app, lambda: window.calendar.count == 100 and not window.calendar.busy)
+        popup = window.root.findChild(QObject, "settingsPopup")
+        assert QMetaObject.invokeMethod(popup, "open")
+        date = window.root.findChild(QObject, "dateField")
+        date.forceActiveFocus()
+        for character in "bad-date":
+            QTest.keyClick(window.root, character)
+        QTest.keyClick(window.root, Qt.Key_Return)
+        spin(app, lambda: not window.calendar.busy)
+        assert backend[1].get("selected_date") == ""
+        assert "YYYY-MM-DD" in window.root.property("feedback")
+        assert date.property("text") == ""
+        wanted = datetime.now(timezone.utc).date().isoformat()
+        for character in wanted:
+            QTest.keyClick(window.root, character)
+        QTest.keyClick(window.root, Qt.Key_Return)
+        spin(
+            app,
+            lambda: (
+                backend[1].get("selected_date") == wanted and not window.calendar.busy
+            ),
+        )
+        assert window.calendar.state["quick_range"] == "manual"
+        assert window.calendar.state["selected_date"] == wanted
+        assert QMetaObject.invokeMethod(popup, "close")
+    finally:
+        window.root.close()
+        window.shutdown()
+        window.engine.deleteLater()
+        app.processEvents()
+
+
+def test_standalone_runtime_always_delivers_off_gui_thread(app, backend):
+    import threading
+    from ui.runtime import CalendarRuntime
+
+    controller, settings = backend
+    assert settings.set("high_notification_minutes", 15)
+    caller = threading.get_ident()
+    entered = threading.Event()
+    release = threading.Event()
+    delivered_on = []
+
+    class Notifier:
+        def notify(self, *args):
+            delivered_on.append(threading.get_ident())
+            entered.set()
+            assert release.wait(timeout=2)
+            return True
+
+    runtime = CalendarRuntime(controller, settings, notifier=Notifier())
+    try:
+        runtime.start()
+        assert entered.wait(timeout=1)
+        assert caller not in delivered_on
+        release.set()
+        spin(app, lambda: not runtime._checking)
+    finally:
+        release.set()
+        runtime.shutdown()
+    assert runtime._queue.closed

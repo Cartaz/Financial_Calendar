@@ -302,6 +302,7 @@ class CalendarViewService:
                 "timezone_name",
                 "auto_refresh_minutes",
                 "high_notification_minutes",
+                "selected_date",
             )
         }
         state.update(

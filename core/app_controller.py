@@ -146,8 +146,19 @@ class AppController:
 
         logger.info("%s: avvio refresh", source_key)
         self._notify("calendar_refresh_started", {"source": source_key})
+
+        def refresh_and_complete():
+            # Future callbacks can run on the caller when work finishes before
+            # registration. Keep parsing and persistence in the worker itself.
+            result = Future()
+            try:
+                result.set_result(scraper())
+            except Exception as exc:
+                result.set_exception(exc)
+            done_callback(result)
+
         try:
-            future = self._executor.submit(scraper)
+            self._executor.submit(refresh_and_complete)
         except RuntimeError as exc:
             refreshing_flag.clear()
             if not self._shutting_down.is_set():
@@ -156,7 +167,6 @@ class AppController:
                     {"source": source_key, "error": str(exc)},
                 )
             return
-        future.add_done_callback(done_callback)
 
     def refresh_all(self) -> None:
         self.refresh_ig()

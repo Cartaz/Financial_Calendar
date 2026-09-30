@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import time
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtTest import QTest
 
 from config.constants import PathConfig
 from config.settings import Settings
@@ -112,6 +114,10 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(
         assert notifier.messages == []
 
         runtime.start()
+        deadline = time.monotonic() + 2
+        while runtime._checking and time.monotonic() < deadline:
+            app.processEvents()
+            QTest.qWait(5)
         assert len(notifier.messages) == 1
         title, body = notifier.messages[0]
         assert "Evento HIGH" in title
@@ -126,4 +132,5 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(
         runtime.configure_notifications()
         assert not runtime.notification_timer.isActive()
     finally:
+        runtime.shutdown()
         controller.shutdown()

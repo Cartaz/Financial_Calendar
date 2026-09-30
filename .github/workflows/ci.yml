@@ -59,7 +59,9 @@ jobs:
           QT_QUICK_BACKEND: rhi
           QSG_RHI_BACKEND: opengl
           LIBGL_ALWAYS_SOFTWARE: "1"
-        run: xvfb-run -a python -m ui.validate --require-rhi
+        run: |
+          xvfb-run -a python -m ui.validate --require-rhi
+          xvfb-run -a python -m pytest tests/test_qml_migration.py -q
 
       - name: Test suite including real D-Bus transport
         run: dbus-run-session -- python -m pytest tests -q

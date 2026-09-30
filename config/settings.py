@@ -248,7 +248,13 @@ class Settings:
 
                 self._data = UserSettings(**normalized)
                 logger.info("Impostazioni caricate da %s", PathConfig.SETTINGS_FILE)
-            except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            except (
+                OSError,
+                json.JSONDecodeError,
+                TypeError,
+                ValueError,
+                RecursionError,
+            ) as exc:
                 logger.warning(
                     "Impossibile caricare le impostazioni, uso default: %s",
                     exc,

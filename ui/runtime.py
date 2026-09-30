@@ -11,6 +11,7 @@ from core.app_controller import AppController
 from core.models import CalendarSource
 from core.notification_policy import NotificationPolicy
 from ui.desktop_notifications import DesktopNotifier
+from ui.workers import WorkQueue
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,8 @@ class CalendarRuntime(QObject):
         self._notifier = notifier or DesktopNotifier()
         self._notification_policy = NotificationPolicy()
         self._started = False
-        self._queue = queue
+        self._owns_queue = queue is None
+        self._queue = queue if queue is not None else WorkQueue(self)
         self._checking = False
 
         self.auto_refresh_timer = QTimer(self)
@@ -104,14 +106,7 @@ class CalendarRuntime(QObject):
         def done(value, error):
             self._checking = False
 
-        if self._queue is not None:
-            self._queue.submit(work, done)
-        else:
-            # Standalone compatibility for non-window consumers; shell always queues.
-            try:
-                work()
-            finally:
-                done(None, None)
+        self._queue.submit(work, done)
 
     def start(self) -> None:
         if self._started:
@@ -127,3 +122,8 @@ class CalendarRuntime(QObject):
         self._started = False
         self.auto_refresh_timer.stop()
         self.notification_timer.stop()
+
+    def shutdown(self) -> None:
+        self.stop()
+        if self._owns_queue:
+            self._queue.shutdown()

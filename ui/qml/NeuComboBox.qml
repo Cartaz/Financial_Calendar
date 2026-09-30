@@ -9,9 +9,10 @@ ComboBox {
     font.pixelSize: 13
     leftPadding: 14
     rightPadding: 28
-    background: Item {
-        RaisedSurface { anchors.fill: parent }
-        Rectangle { anchors.fill: parent; color: "transparent"; radius: Theme.controlRadius; border.width: root.activeFocus ? 1 : 0; border.color: Theme.accent }
+    background: NeuControlSurface {
+        pressed: root.down
+        hovered: root.hovered
+        focused: root.activeFocus
     }
     contentItem: Text { text: root.displayText; color: Theme.text; font: root.font; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
     indicator: Text { x: root.width-24; anchors.verticalCenter: parent.verticalCenter; text: "⌄"; color: Theme.muted }
@@ -23,8 +24,8 @@ ComboBox {
         text: String(modelData)
         font: root.font
         highlighted: root.highlightedIndex === index
-        contentItem: Text { text: String(choice.modelData); color: Theme.text; font: root.font; verticalAlignment: Text.AlignVCenter }
-        background: Rectangle { color: choice.highlighted ? "#303030" : Theme.surface }
+        contentItem: Text { text: String(choice.modelData); color: choice.highlighted ? Theme.accent : Theme.text; font: root.font; verticalAlignment: Text.AlignVCenter }
+        background: Item { }
     }
     popup: Popup {
         y: root.height + 6
@@ -37,6 +38,7 @@ ComboBox {
             implicitHeight: contentHeight
             model: root.popup.visible ? root.delegateModel : null
             currentIndex: root.highlightedIndex
+            highlight: InsetSurface { }
             ScrollIndicator.vertical: ScrollIndicator {}
         }
     }

@@ -4,23 +4,25 @@ Item {
     id: root
     property real radius: Theme.controlRadius
     property color fill: Theme.surface
+    property bool hovered: false
+    property bool strong: false
     RectangularShadow {
         anchors.fill: plate
-        offset: Qt.vector2d(4, 4)
+        offset: root.strong ? Theme.strongDarkOffset : (root.hovered ? Theme.hoverDarkOffset : Theme.softDarkOffset)
         radius: root.radius
-        blur: 12
+        blur: root.strong ? Theme.strongDarkBlur : (root.hovered ? Theme.hoverDarkBlur : Theme.softDarkBlur)
         spread: 0
-        color: "#b0000000"
+        color: root.strong ? Theme.strongDarkShadow : Theme.softDarkShadow
         cached: false
     }
     RectangularShadow {
         anchors.fill: plate
-        offset: Qt.vector2d(-3, -3)
+        offset: root.strong ? Theme.strongLightOffset : (root.hovered ? Theme.hoverLightOffset : Theme.softLightOffset)
         radius: root.radius
-        blur: 10
+        blur: root.strong ? Theme.strongLightBlur : (root.hovered ? Theme.hoverLightBlur : Theme.softLightBlur)
         spread: 0
-        color: "#182f2f2f"
+        color: root.strong ? Theme.strongLightShadow : Theme.softLightShadow
         cached: false
     }
-    Rectangle { id: plate; anchors.fill: parent; color: root.fill; radius: root.radius; border.color: "#232323" }
+    Rectangle { id: plate; anchors.fill: parent; color: root.fill; radius: root.radius; border.color: Theme.divider }
 }

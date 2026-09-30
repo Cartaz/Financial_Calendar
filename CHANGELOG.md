@@ -7,6 +7,12 @@
 - Tabella e log virtualizzati, tema neumorfico compatto condiviso, Noto Sans incluso, controlli accessibili e navigazione da tastiera.
 - Conservati sorgenti, filtri, ricerca, intervalli, ordinamento e riordino colonne, export, cache, notifiche, log, scorciatoie e geometria.
 
+### Audit desktop del 29 settembre 2026
+- Corrette race nel completamento refresh, modifiche involontarie alla data relative al focus, JSON eccessivamente annidati, overflow cache e avvio prematuro di processi HTTP.
+- Notifiche sempre asincrone, risposta D-Bus UINT32 validata e servizio dei test corretto; riordino colonne con gesto QML interno e persistenza Python.
+- Superfici uniformi, ombre calibrate nel tema, background controlli condivisi e navigazione tabella da tastiera.
+- Audit documentato in `AUDIT_QML.md`; 81 test locali e 9 interazioni OpenGL passate, avvio e chiusura verificati con entrambi i feed reali.
+
 ### Affidabilità
 - Query, matching, salvataggi, export e notifiche fuori dal thread GUI; export dalla vista canonica Python.
 - Refresh protetto fino al completamento della persistenza, errori per sorgente e disponibilità parziale esplicita.

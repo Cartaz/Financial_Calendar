@@ -123,6 +123,7 @@ class CalendarCache:
                 TypeError,
                 ValueError,
                 OverflowError,
+                RecursionError,
             ) as exc:
                 logger.warning("Cache %s ignorata: %s", source.value, exc)
                 return None
@@ -156,7 +157,7 @@ class CalendarCache:
 
         try:
             normalized_timestamp = _normalize_utc_timestamp(refreshed_at)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             logger.error("Cache %s non salvata: %s", source.value, exc)
             return False
 

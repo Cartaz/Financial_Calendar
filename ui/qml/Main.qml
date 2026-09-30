@@ -113,7 +113,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.minimumHeight: 150
-            InsetSurface { anchors.fill: parent; radius: Theme.cardRadius }
+            RaisedSurface { anchors.fill: parent; radius: Theme.cardRadius; strong: true }
             HorizontalHeaderView {
                 id: header
                 objectName: "eventHeader"
@@ -123,24 +123,41 @@ ApplicationWindow {
                 anchors.margins: 10
                 height: 42
                 syncView: table
-                movableColumns: !root.calendar.busy
+                movableColumns: false
                 clip: true
-                delegate: Item {
+                delegate: NeuHeaderDelegate {
                     id: headerCell
-                    required property string display
+                    objectName: "headerCell" + column
                     required property int column
-                    implicitHeight: 42
-                    implicitWidth: 112
-                    NeuButton {
-                    anchors.fill: parent
-                    anchors.margins: 3
-                    text: headerCell.display
+                    property int dropColumn: -1
+                    text: String(model.display)
                     enabled: !root.calendar.busy
-                    onClicked: root.calendar.sortColumn(headerCell.column)
-                    Keys.onLeftPressed: event => { if (event.modifiers & Qt.AltModifier) root.calendar.moveColumn(headerCell.column, headerCell.column - 1); else event.accepted = false }
-                    Keys.onRightPressed: event => { if (event.modifiers & Qt.AltModifier) root.calendar.moveColumn(headerCell.column, headerCell.column + 1); else event.accepted = false }
+                    onClicked: root.calendar.sortColumn(column)
+                    Keys.onLeftPressed: event => { if (event.modifiers & Qt.AltModifier) root.calendar.moveColumn(column, column - 1); else event.accepted = false }
+                    Keys.onRightPressed: event => { if (event.modifiers & Qt.AltModifier) root.calendar.moveColumn(column, column + 1); else event.accepted = false }
                     ToolTip.visible: hovered
                     ToolTip.text: "Ordina · Alt+← / Alt+→ sposta la colonna"
+                    DragHandler {
+                        id: headerDrag
+                        target: null
+                        enabled: !root.calendar.busy
+                        acceptedButtons: Qt.LeftButton
+                        yAxis.enabled: false
+                        onCentroidChanged: {
+                            if (active) {
+                                const point = headerCell.mapToItem(header.contentItem, centroid.position)
+                                headerCell.dropColumn = header.cellAtPosition(point, true).x
+                            }
+                        }
+                        onCanceled: headerCell.dropColumn = -1
+                        onActiveChanged: {
+                            if (active) {
+                                headerCell.dropColumn = headerCell.column
+                            } else if (headerCell.dropColumn >= 0 && headerCell.dropColumn !== headerCell.column) {
+                                root.calendar.moveColumn(headerCell.column, headerCell.dropColumn)
+                                headerCell.dropColumn = -1
+                            }
+                        }
                     }
                 }
             }
@@ -154,6 +171,7 @@ ApplicationWindow {
                 anchors.margins: 10
                 clip: true
                 reuseItems: true
+                activeFocusOnTab: true
                 property bool resettingOrder: false
                 onColumnMoved: { if (!resettingOrder) orderDelay.restart() }
                 Timer {
@@ -198,8 +216,9 @@ ApplicationWindow {
                     required property bool selected
                     implicitWidth: 112
                     implicitHeight: 48
-                    color: selected ? "#342418" : (row % 2 ? "#191919" : Theme.surface)
-                    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: cell.isNextHigh ? "#66502e" : "#232323" }
+                    color: Theme.surface
+                    Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Theme.insetDark; visible: cell.selected }
+                    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: cell.isNextHigh ? Theme.accent : (cell.selected ? Theme.insetLight : Theme.divider) }
                     Row {
                         anchors.fill: parent
                         anchors.margins: 10
@@ -211,7 +230,7 @@ ApplicationWindow {
                             Text {
                                 width: parent.width
                                 text: cell.display
-                                color: cell.columnKey === "impact" && cell.impactLevel === "HIGH" ? Theme.accent : (cell.isPast ? Theme.muted : Theme.text)
+                                color: cell.selected || (cell.columnKey === "impact" && cell.impactLevel === "HIGH") ? Theme.accent : (cell.isPast ? Theme.muted : Theme.text)
                                 font.family: Theme.font
                                 font.pixelSize: 12
                                 elide: Text.ElideRight
@@ -258,6 +277,7 @@ ApplicationWindow {
     }
     Popup {
         id: settingsPopup
+        objectName: "settingsPopup"
         anchors.centerIn: parent
         width: 460
         padding: 26
@@ -269,9 +289,35 @@ ApplicationWindow {
             spacing: 16
             Label { text: "Impostazioni"; font.pixelSize: 22; color: Theme.text }
             Label { text: "Fuso orario · local, UTC o Europe/Rome"; color: Theme.muted }
-            NeuTextField { Layout.fillWidth: true; placeholderText: "Fuso orario"; text: root.calendar.state.timezone_name || "local"; onEditingFinished: root.calendar.setFilter("timezone_name", text) }
+            NeuTextField {
+                objectName: "timezoneField"
+                Layout.fillWidth: true
+                property bool edited: false
+                placeholderText: "Fuso orario"
+                text: root.calendar.state.timezone_name || "local"
+                onTextEdited: edited = true
+                onEditingFinished: {
+                    if (edited) {
+                        edited = false
+                        root.calendar.setFilter("timezone_name", text)
+                    }
+                }
+            }
             Label { text: "Data specifica · AAAA-MM-GG (vuoto: tutte)"; color: Theme.muted }
-            NeuTextField { Layout.fillWidth: true; placeholderText: "AAAA-MM-GG"; text: root.calendar.state.date || ""; onEditingFinished: root.calendar.setFilter("selected_date", text) }
+            NeuTextField {
+                objectName: "dateField"
+                Layout.fillWidth: true
+                property bool edited: false
+                placeholderText: "AAAA-MM-GG"
+                text: root.calendar.state.selected_date || ""
+                onTextEdited: edited = true
+                onEditingFinished: {
+                    if (edited) {
+                        edited = false
+                        root.calendar.setFilter("selected_date", text)
+                    }
+                }
+            }
             RowLayout {
                 Label { Layout.fillWidth: true; text: "Aggiornamento automatico (min)"; color: Theme.text }
                 NeuComboBox { model: ["0", "5", "15", "30", "60"]; currentIndex: Math.max(0, model.indexOf(String(root.calendar.state.auto_refresh_minutes))); onActivated: root.preferences.setAutoRefresh(Number(currentText)) }

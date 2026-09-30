@@ -2,7 +2,7 @@
 
 import json
 import sys
-from jeepney import DBusAddress, MessageType, new_method_call
+from jeepney import DBusAddress, HeaderFields, MessageType, new_method_call
 from jeepney.io.blocking import open_dbus_connection
 
 
@@ -25,8 +25,13 @@ def main():
         reply = connection.send_and_get_reply(message, timeout=3)
         if reply.header.message_type == MessageType.error:
             raise RuntimeError(str(reply.body))
-        if not reply.body or type(reply.body[0]) is not int:
-            raise RuntimeError("Risposta di consegna D-Bus non valida")
+        if (
+            reply.header.message_type != MessageType.method_return
+            or reply.header.fields.get(HeaderFields.signature) != "u"
+            or len(reply.body) != 1
+            or type(reply.body[0]) is not int
+        ):
+            raise RuntimeError(f"Risposta di consegna D-Bus non valida: {reply.body!r}")
     finally:
         connection.close()
 

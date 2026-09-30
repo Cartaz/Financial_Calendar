@@ -150,6 +150,7 @@ class CalendarWindow(QObject):
     def shutdown(self):
         self.stop()
         self.controller.shutdown()
+        self.runtime.shutdown()
         self.queue.shutdown()
         self.notification_queue.shutdown()
         logging.getLogger().removeHandler(self.log_handler)

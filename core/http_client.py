@@ -25,6 +25,8 @@ class CalendarHttpClient:
     ) -> requests.Response:
         if cancel_event is not None and cancel_event.is_set():
             raise requests.ConnectionError("Richiesta annullata")
+        # Validate the request before starting a child that waits on stdin.
+        data = json.dumps({"url": url, **options}).encode()
         process = subprocess.Popen(
             [sys.executable, str(Path(__file__).with_name("http_transport.py"))],
             stdin=subprocess.PIPE,
@@ -32,7 +34,6 @@ class CalendarHttpClient:
             stderr=subprocess.PIPE,
         )
         deadline = time.monotonic() + deadline_seconds
-        data = json.dumps({"url": url, **options}).encode()
         try:
             while True:
                 if cancel_event is not None and cancel_event.is_set():

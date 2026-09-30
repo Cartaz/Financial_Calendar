@@ -99,6 +99,7 @@ def test_runtime_stop_is_idempotent_and_stops_owned_timers() -> None:
     assert runtime.started is False
     assert not runtime.auto_refresh_timer.isActive()
     assert not runtime.notification_timer.isActive()
+    runtime.shutdown()
 
 
 def test_release_publish_is_gated_by_ci_and_has_no_branch_cleanup() -> None:

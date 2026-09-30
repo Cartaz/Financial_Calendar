@@ -1,29 +1,28 @@
 import QtQuick
 import QtQuick.Controls
-Button {
+HorizontalHeaderViewDelegate {
     id: root
-    property bool emphasized: false
-    implicitHeight: 40
-    implicitWidth: Math.max(78, contentItem.implicitWidth + 28)
-    padding: 12
+    implicitHeight: 42
+    implicitWidth: 112
+    padding: 8
     font.family: Theme.font
     font.pixelSize: 13
     hoverEnabled: true
     opacity: enabled ? 1 : 0.4
     Accessible.name: text
     background: NeuControlSurface {
+        anchors.fill: parent
+        anchors.margins: 3
         pressed: root.down
-        selected: root.checked
-        hovered: root.hovered
         focused: root.activeFocus
+        hovered: root.hovered
     }
     contentItem: Text {
         text: root.text
-        color: root.checked || root.emphasized ? Theme.accent : Theme.text
+        color: root.activeFocus ? Theme.accent : Theme.text
         font: root.font
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
     }
-    Behavior on opacity { NumberAnimation { duration: Theme.duration } }
 }
