@@ -5,13 +5,12 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-import os
 import re
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from config.storage import atomic_write_text
 from core.time_utils import try_parse_utc
 
 
@@ -92,10 +91,15 @@ def _fold_ics_line(line: str) -> list[str]:
     return folded
 
 
+# UIDs keep ForexFactory's former key so re-imported calendars do not duplicate.
+_UID_SOURCE_KEYS = {"forexfactory": "ig"}
+
+
 def _event_uid(event: Mapping[str, object], dt_utc: datetime) -> str:
+    source = _text(event.get("source"))
     stable = "|".join(
         [
-            _text(event.get("source")),
+            _UID_SOURCE_KEYS.get(source, source),
             dt_utc.isoformat(),
             _text(event.get("country")),
             _text(event.get("event_name")),
@@ -180,25 +184,5 @@ def write_export(
     else:
         raise ValueError(f"Formato export non supportato: {export_format}")
 
-    destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temp_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="",
-            dir=destination.parent,
-            prefix=f".{destination.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as handle:
-            temp_path = Path(handle.name)
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_path, destination)
-    finally:
-        if temp_path is not None and temp_path.exists():
-            temp_path.unlink(missing_ok=True)
+    atomic_write_text(Path(path), content, newline="")
     return len(event_list)

@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
+import socket
 import sys
+from typing import Callable
 
+from PySide6.QtCore import QSocketNotifier
 from PySide6.QtWidgets import QApplication
 
 from config.constants import AppMeta, PathConfig
@@ -18,6 +22,47 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=AppMeta.DISPLAY_NAME)
     parser.add_argument("--debug", action="store_true")
     return parser.parse_args()
+
+
+def _quit_on_termination_signals(app: QApplication) -> Callable[[], None]:
+    """Turn SIGTERM/SIGINT into a normal Qt quit so shutdown runs in order.
+
+    Python only runs signal handlers between bytecodes, which never happens
+    while Qt's C++ event loop is idle. The wakeup socket makes the loop notice.
+    Returns a function that restores the previous handlers once the loop ends.
+    """
+    handled = {
+        signum
+        for signum in (signal.SIGTERM, signal.SIGINT)
+        if signal.getsignal(signum) is not signal.SIG_IGN  # e.g. background jobs
+    }
+    receiver, sender = socket.socketpair()
+    receiver.setblocking(False)
+    sender.setblocking(False)
+    previous_fd = signal.set_wakeup_fd(sender.fileno())
+    previous = {signum: signal.signal(signum, lambda *_: None) for signum in handled}
+
+    def restore_previous_signals() -> None:
+        # Once the loop has ended nothing reads the socket any more: a further
+        # signal must behave as before, e.g. terminate a hung shutdown.
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        signal.set_wakeup_fd(previous_fd)
+
+    notifier = QSocketNotifier(receiver.fileno(), QSocketNotifier.Type.Read, app)
+
+    def on_signal() -> None:
+        try:
+            received = receiver.recv(64)
+        except BlockingIOError:
+            return
+        if any(signum in received for signum in handled):
+            logging.getLogger(__name__).info("Segnale di chiusura ricevuto")
+            app.quit()
+
+    notifier.activated.connect(on_signal)
+    app._signal_sockets = (receiver, sender)  # keep the pair alive with the app
+    return restore_previous_signals
 
 
 def main() -> int:
@@ -38,13 +83,15 @@ def main() -> int:
     app.setApplicationVersion(AppMeta.VERSION)
     app.setDesktopFileName("financial_calendar")
     app.setQuitOnLastWindowClosed(True)
+    restore_previous_signals = _quit_on_termination_signals(app)
 
-    controller = AppController(settings, debug=args.debug)
+    controller = AppController(debug=args.debug)
     app.aboutToQuit.connect(controller.begin_shutdown)
 
     try:
         window = CalendarWindow(controller, settings, debug=args.debug)
     except Exception:
+        restore_previous_signals()
         logging.getLogger(__name__).exception("Impossibile inizializzare la UI")
         controller.shutdown()
         settings.save()
@@ -54,6 +101,7 @@ def main() -> int:
     try:
         return app.exec()
     finally:
+        restore_previous_signals()
         window.shutdown()
 
 

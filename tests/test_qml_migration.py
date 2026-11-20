@@ -9,13 +9,11 @@ import pytest
 from PySide6.QtCore import (
     QObject,
     QMetaObject,
-    Q_ARG,
     qInstallMessageHandler,
     QtMsgType,
 )
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
-from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from core.cache import CalendarCache
@@ -39,9 +37,6 @@ def spin(app, condition, timeout=4):
 
 @pytest.fixture
 def backend(monkeypatch, tmp_path):
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(PathConfig, "SETTINGS_FILE", tmp_path / "settings.json")
     now = datetime.now(timezone.utc).replace(microsecond=0)
     for source in (CalendarSource.FOREXFACTORY, CalendarSource.FXSTREET):
         events = []
@@ -65,8 +60,8 @@ def backend(monkeypatch, tmp_path):
     settings = Settings()
     assert settings.set_many(
         {
-            "ig_selected_region": "ALL",
-            "ig_selected_impact": "ALL",
+            "forexfactory_selected_region": "ALL",
+            "forexfactory_selected_impact": "ALL",
             "fxstreet_selected_region": "ALL",
             "fxstreet_selected_impact": "ALL",
             "combined_selected_region": "ALL",
@@ -74,7 +69,7 @@ def backend(monkeypatch, tmp_path):
             "timezone_name": "UTC",
         }
     )
-    controller = AppController(settings)
+    controller = AppController()
     monkeypatch.setattr(controller, "refresh_all", lambda: None)
     yield controller, settings
     controller.shutdown()
@@ -85,12 +80,12 @@ def test_view_source_filters_timezone_order_and_duplicates(backend):
     service = CalendarViewService(controller, settings)
     assert len(service.snapshot().rows) == 100
     assert service.change("active_source", "combined").columns == COLUMNS["combined"]
-    view = service.change("region", "USA", source="combined")
+    view = service.change("region", "USA")
     assert len(view.rows) == 100
     assert {row["duplicate_group"] for row in view.rows} == {
         f"D{i}" for i in range(1, 51)
     }
-    view = service.change("impact", "HIGH", source="combined")
+    view = service.change("impact", "HIGH")
     assert len(view.rows) == 34
     view = service.change("search", "Event 0")
     assert len(view.rows) == 2
@@ -98,13 +93,13 @@ def test_view_source_filters_timezone_order_and_duplicates(backend):
     after = service.change("timezone_name", "UTC+02:00").rows[0]
     assert after["utc_dt"] == before["utc_dt"]
     assert after["time"] != before["time"]
-    view = service.move_column("combined", 4, 0)
+    view = service.move_column(4, 0, COLUMNS["combined"])
     assert view.columns[0] == "event_name"
     loaded = Settings()
     loaded.load()
     assert loaded.get("combined_column_order")[0] == 4
     with pytest.raises(ValueError):
-        service.move_column("combined", -1, 0)
+        service.move_column(-1, 0, view.columns)
 
 
 def test_relative_ranges_and_natural_sort(backend):
@@ -123,11 +118,11 @@ def test_relative_ranges_and_natural_sort(backend):
         for row in view.rows
     )
     service.change("range", "all")
-    view = service.change("sort", "event_name", source="ig")
+    view = service.change("sort", "event_name")
     assert [row["event_name"] for row in view.rows[:12]] == [
         f"Event {i}" for i in range(12)
     ]
-    view = service.change("sort", "event_name", source="ig")
+    view = service.change("sort", "event_name")
     assert view.rows[0]["event_name"] == "Event 99"
     assert sum(row["next_high"] for row in view.rows) == 1
     assert countdown(300) == "tra 5 min"
@@ -179,9 +174,7 @@ def test_qml_models_interaction_export_and_geometry(app, backend, tmp_path):
         spin(app, lambda: window.calendar.count == 2 and not window.calendar.busy)
         assert window.calendar.table.columnCount() == 10
         assert all(row["duplicate_group"] for row in window.calendar.table.rows)
-        assert QMetaObject.invokeMethod(
-            table, "moveColumn", Q_ARG(int, 4), Q_ARG(int, 0)
-        )
+        window.calendar.moveColumn(4, 0)
         spin(
             app,
             lambda: (
@@ -198,7 +191,7 @@ def test_qml_models_interaction_export_and_geometry(app, backend, tmp_path):
         with output.open() as stream:
             rows = list(csv.DictReader(stream))
         assert len(rows) == 2
-        assert {row["source"] for row in rows} == {"ig", "fxstreet"}
+        assert {row["source"] for row in rows} == {"forexfactory", "fxstreet"}
         assert all(row["actual"] == "123K" for row in rows)
         assert rows[0]["utc_dt"] == window.calendar.table.rows[0]["utc_dt"]
         assert rows[0]["date"] == window.calendar.table.rows[0]["date"]
@@ -301,7 +294,7 @@ def test_header_mouse_drag_persists_visual_order(app, backend):
                 window.calendar.table.columns[2] == "date" and not window.calendar.busy
             ),
         )
-        assert backend[1].get("ig_column_order")[:3] == [1, 2, 0]
+        assert backend[1].get("forexfactory_column_order")[:3] == [1, 2, 0]
         assert window.calendar.state["sort_key"] == ""
         date_cell = visual_item(window.root.contentItem(), "headerCell2")
         date_cell.forceActiveFocus()
@@ -312,7 +305,7 @@ def test_header_mouse_drag_persists_visual_order(app, backend):
                 window.calendar.table.columns[1] == "date" and not window.calendar.busy
             ),
         )
-        assert backend[1].get("ig_column_order")[:3] == [1, 0, 2]
+        assert backend[1].get("forexfactory_column_order")[:3] == [1, 0, 2]
         window.calendar.selectSource("fxstreet")
         spin(
             app,
@@ -321,11 +314,11 @@ def test_header_mouse_drag_persists_visual_order(app, backend):
                 and not window.calendar.busy
             ),
         )
-        window.calendar.selectSource("ig")
+        window.calendar.selectSource("forexfactory")
         spin(
             app,
             lambda: (
-                window.calendar.state["active_source"] == "ig"
+                window.calendar.state["active_source"] == "forexfactory"
                 and not window.calendar.busy
             ),
         )
@@ -404,3 +397,104 @@ def test_standalone_runtime_always_delivers_off_gui_thread(app, backend):
         release.set()
         runtime.shutdown()
     assert runtime._queue.closed
+
+
+def test_commands_queued_after_a_source_switch_apply_to_the_new_source(app, backend):
+    from ui.adapters import CalendarAdapter
+    from ui.workers import WorkQueue
+
+    controller, settings = backend
+    queue = WorkQueue()
+    adapter = CalendarAdapter(controller, settings, queue)
+    try:
+        spin(app, lambda: not queue.pending)
+        assert adapter.state["active_source"] == "forexfactory"
+        # Both commands are queued before the first snapshot comes back.
+        adapter.selectSource("fxstreet")
+        adapter.setFilter("region", "USA")
+        # Header commands built from the ForexFactory view are now stale.
+        adapter.moveColumn(3, 0)
+        adapter.sortColumn(4)
+        spin(app, lambda: not queue.pending)
+        assert adapter.state["active_source"] == "fxstreet"
+        assert adapter.state["region"] == "USA"
+        assert settings.get("fxstreet_selected_region") == "USA"
+        assert settings.get("forexfactory_selected_region") == "ALL"
+        assert adapter.table.columns == COLUMNS["fxstreet"]
+        assert settings.get("forexfactory_column_order") == list(range(8))
+        assert settings.get("fxstreet_sort_key") == ""
+        assert settings.get("forexfactory_sort_key") == ""
+
+        # Two Alt+Right presses queued from the same view move the column once.
+        adapter.moveColumn(2, 3)
+        adapter.moveColumn(2, 3)
+        spin(app, lambda: not queue.pending)
+        assert adapter.table.columns[:4] == ("date", "time", "event_name", "country")
+    finally:
+        adapter.stop()
+        queue.shutdown()
+
+
+def test_maximized_window_keeps_its_normal_geometry(app, backend):
+    controller, settings = backend
+    window = CalendarWindow(controller, settings, autostart=False)
+    try:
+        window.show()
+        QTest.qWait(50)
+        window.root.setGeometry(40, 50, 820, 600)
+        QTest.qWait(400)  # let the windowed geometry settle
+        # A window manager may move the window before reporting the maximized
+        # state; that intermediate frame must not become the normal geometry.
+        window.root.setGeometry(60, 70, 820, 600)
+        QTest.qWait(10)
+        assert window.root.visibility().name == "Windowed"
+        assert window.root.x() == 60
+        window.root.showMaximized()
+        spin(app, lambda: window.root.visibility().name == "Maximized")
+    finally:
+        window.root.close()
+        window.shutdown()
+        window.engine.deleteLater()
+        app.processEvents()
+    saved = json.loads(settings.get("window_geometry")[4:])
+    assert saved == {"x": 40, "y": 50, "width": 820, "height": 600, "maximized": True}
+
+    # A restored maximized window opens maximized and saves the same state
+    # again, instead of persisting the maximized size as its normal size.
+    restored = CalendarWindow(controller, settings, autostart=False)
+    try:
+        restored.show()
+        spin(app, lambda: restored.root.visibility().name == "Maximized")
+    finally:
+        restored.root.close()
+        restored.shutdown()
+        restored.engine.deleteLater()
+        app.processEvents()
+    again = json.loads(settings.get("window_geometry")[4:])
+    # x may be clamped onto the 800 px offscreen screen; size and state persist.
+    assert {key: again[key] for key in ("y", "width", "height", "maximized")} == {
+        "y": 50,
+        "width": 820,
+        "height": 600,
+        "maximized": True,
+    }
+
+
+def test_window_maximized_right_away_keeps_the_default_normal_size(app, backend):
+    controller, settings = backend
+    window = CalendarWindow(controller, settings, autostart=False)
+    try:
+        window.show()
+        window.root.showMaximized()
+        spin(app, lambda: window.root.visibility().name == "Maximized")
+        # Saved as-is at shutdown, when the hidden window's geometry is unreliable.
+        normal = window._normal_geometry
+        assert normal is not None
+        assert (normal.width(), normal.height()) == (1360, 820)
+    finally:
+        window.root.close()
+        window.shutdown()
+        window.engine.deleteLater()
+        app.processEvents()
+    saved = json.loads(settings.get("window_geometry")[4:])
+    assert (saved["width"], saved["height"], saved["maximized"]) == (1360, 820, True)

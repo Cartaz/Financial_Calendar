@@ -1,6 +1,22 @@
 # Changelog
 
-## [1.1.0] - 2026-09-08
+## [Unreleased]
+
+### Correzioni
+- Ordinamento numerico corretto per Attuale, Previsione, Precedente e Dev (segno, decimali e suffissi K/M/B/T); valori vuoti in fondo.
+- Filtri e spostamenti di colonna inviati subito dopo un cambio di sorgente si applicano alla sorgente selezionata; i controlli non vengono più disabilitati a ogni aggiornamento.
+- Orario delle notifiche nel fuso scelto nelle impostazioni.
+- Finestra massimizzata: lo stato e la dimensione normale vengono salvati e ripristinati.
+- SIGTERM e Ctrl+C chiudono in modo ordinato, salvando la geometria.
+
+### Manutenzione
+- La sorgente ForexFactory usa la chiave `forexfactory` al posto della storica `ig`; impostazioni e cache esistenti sono migrate automaticamente. Nel CSV esportato la colonna `source` vale ora `forexfactory` invece di `ig`; gli UID ICS restano invariati.
+- Rimossi codice morto e un secondo meccanismo di riordino colonne non raggiungibile dall'utente; colonne, sorgenti ed etichette definite una sola volta.
+- Scrittura atomica condivisa, stato del controller indicizzato per sorgente, timestamp di refresh solo nella cache.
+- Test isolati da `tests/conftest.py`; dipendenze di sviluppo in `requirements-dev.txt`. Documentata la copertura settimanale di ForexFactory.
+- Audit QML spostato in `docs/AUDIT_QML.md`; analisi completa in `ANALISI.md`.
+
+## [1.1.0] - 2026-09-30
 
 ### UI QML nativa
 - QApplication e QQmlApplicationEngine; eliminati WebEngine, WebChannel e frontend web dopo confronto di parità su 81 combinazioni.
@@ -11,7 +27,7 @@
 - Corrette race nel completamento refresh, modifiche involontarie alla data relative al focus, JSON eccessivamente annidati, overflow cache e avvio prematuro di processi HTTP.
 - Notifiche sempre asincrone, risposta D-Bus UINT32 validata e servizio dei test corretto; riordino colonne con gesto QML interno e persistenza Python.
 - Superfici uniformi, ombre calibrate nel tema, background controlli condivisi e navigazione tabella da tastiera.
-- Audit documentato in `AUDIT_QML.md`; 81 test locali e 9 interazioni OpenGL passate, avvio e chiusura verificati con entrambi i feed reali.
+- Audit documentato in `docs/AUDIT_QML.md`; 81 test locali e 9 interazioni OpenGL passate, avvio e chiusura verificati con entrambi i feed reali.
 
 ### Affidabilità
 - Query, matching, salvataggi, export e notifiche fuori dal thread GUI; export dalla vista canonica Python.

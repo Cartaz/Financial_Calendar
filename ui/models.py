@@ -7,8 +7,7 @@ from PySide6.QtCore import (
     Qt,
     Slot,
 )
-from config.constants import PathConfig, CalendarDefaults
-from core.calendar_view import LABELS, SOURCES
+from config.constants import COLUMN_LABELS, SOURCES, CalendarDefaults, PathConfig
 
 
 class RecordListModel(QAbstractListModel):
@@ -104,7 +103,7 @@ class CalendarTableModel(QAbstractTableModel):
                 if key == self._sort_key
                 else ""
             )
-            return LABELS[key] + suffix
+            return COLUMN_LABELS[key] + suffix
         return None
 
     @Slot(int, result=float)

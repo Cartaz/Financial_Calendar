@@ -12,16 +12,6 @@ from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 
 
-@pytest.fixture
-def isolated_paths(monkeypatch, tmp_path):
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path / "config")
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(
-        PathConfig, "SETTINGS_FILE", tmp_path / "config" / "settings.json"
-    )
-    PathConfig.ensure_dirs()
-
-
 def event():
     dt = datetime.now(timezone.utc) + timedelta(hours=1)
     return CalendarEvent(
@@ -43,9 +33,9 @@ def test_fast_refresh_completion_does_not_persist_on_caller_thread(
     caller = threading.get_ident()
     saved_on = []
     monkeypatch.setattr(
-        app_controller, "scrape_ig_calendar", lambda **kwargs: [event()]
+        app_controller, "scrape_forexfactory_calendar", lambda **kwargs: [event()]
     )
-    controller = app_controller.AppController(Settings())
+    controller = app_controller.AppController()
     real_submit = controller._executor.submit
 
     def already_completed(*args, **kwargs):
@@ -60,7 +50,7 @@ def test_fast_refresh_completion_does_not_persist_on_caller_thread(
         lambda *args: saved_on.append(threading.get_ident()) or True,
     )
     try:
-        controller.refresh_ig()
+        controller.refresh(CalendarSource.FOREXFACTORY)
         assert saved_on and caller not in saved_on
         assert not controller.is_refreshing(CalendarSource.FOREXFACTORY)
     finally:
@@ -96,7 +86,7 @@ def test_excessively_nested_json_is_rejected_without_startup_crash(
         path = PathConfig.SETTINGS_FILE
         read = Settings().load
     else:
-        path = PathConfig.APP_DATA_DIR / "calendar_ig.json"
+        path = PathConfig.APP_DATA_DIR / "calendar_forexfactory.json"
 
         def read():
             return CalendarCache().load(CalendarSource.FOREXFACTORY)

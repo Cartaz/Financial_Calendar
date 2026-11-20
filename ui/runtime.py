@@ -7,6 +7,7 @@ import logging
 from PySide6.QtCore import QObject, QTimer
 
 from config.settings import Settings
+from config.timezones import resolve_timezone
 from core.app_controller import AppController
 from core.models import CalendarSource
 from core.notification_policy import NotificationPolicy
@@ -86,6 +87,10 @@ class CalendarRuntime(QObject):
         self._checking = True
 
         def work():
+            try:
+                zone = resolve_timezone(self._settings.get("timezone_name"))
+            except ValueError:
+                zone = None
             events = []
             for source in (CalendarSource.FOREXFACTORY, CalendarSource.FXSTREET):
                 events.extend(
@@ -99,7 +104,7 @@ class CalendarRuntime(QObject):
                 if not self._started:
                     break
                 title = f"Evento HIGH tra {remaining} min"
-                body = f"{event.country} · {event.event_name} · {event_dt.astimezone().strftime('%H:%M')}"
+                body = f"{event.country} · {event.event_name} · {event_dt.astimezone(zone):%H:%M}"
                 if self._notifier.notify(title, body):
                     self._notification_policy.mark_delivered(event)
 

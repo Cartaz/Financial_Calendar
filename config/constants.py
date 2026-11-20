@@ -10,38 +10,68 @@ class AppMeta:
     NAME = "financial_calendar"
     DISPLAY_NAME = "Calendario Finanziario"
     VERSION = "1.1.0"
-    AUTHOR = "Cartaz"
-    DESCRIPTION = "Calendari economici ForexFactory/Faireconomy e FXStreet"
     ICON_NAME = "financial-calendar"
 
 
-class CalendarDefaults:
-    IG_COLUMNS = [
-        "Data",
-        "Ora",
-        "Paese",
-        "Importanza",
-        "Evento",
-        "Attuale",
-        "Previsione",
-        "Precedente",
-    ]
-    FXSTREET_COLUMNS = [
-        "Data",
-        "Ora",
-        "Paese",
-        "Evento",
-        "Impatto",
-        "Attuale",
-        "Dev",
-        "Consensus",
-        "Precedente",
-    ]
+# Source keys shown by the UI; "combined" merges both feeds.
+SOURCES = {"forexfactory": "ForexFactory", "fxstreet": "FXStreet", "combined": "Tutti"}
 
+# Canonical column keys per source, in default display order.
+COLUMNS: dict[str, tuple[str, ...]] = {
+    "forexfactory": (
+        "date",
+        "time",
+        "country",
+        "impact",
+        "event_name",
+        "actual",
+        "forecast",
+        "previous",
+    ),
+    "fxstreet": (
+        "date",
+        "time",
+        "country",
+        "event_name",
+        "impact",
+        "actual",
+        "deviation",
+        "forecast",
+        "previous",
+    ),
+    "combined": (
+        "date",
+        "time",
+        "country",
+        "impact",
+        "event_name",
+        "source",
+        "actual",
+        "forecast",
+        "previous",
+        "deviation",
+    ),
+}
+
+COLUMN_LABELS = {
+    "date": "Data",
+    "time": "Ora",
+    "country": "Paese",
+    "impact": "Impatto",
+    "event_name": "Evento",
+    "source": "Sorgente",
+    "actual": "Attuale",
+    "forecast": "Previsione",
+    "previous": "Precedente",
+    "deviation": "Dev",
+}
+
+
+class CalendarDefaults:
     # requests supports a (connect_timeout, read_timeout) tuple.
     HTTP_TIMEOUT = (5, 15)
 
-    REGIONS = ["EUR", "USA", "JPN", "GBP", "CHF", "CAD", "AUD", "NZD", "CNY", "ALL"]
+    REGIONS = ["ALL", "EUR", "USA", "JPN", "GBP", "CHF", "CAD", "AUD", "NZD", "CNY"]
     IMPACT_LEVELS = ["HIGH", "MID", "LOW"]
     PAST_EVENT_CUTOFF_HOURS = 24
 
@@ -96,9 +126,6 @@ class PathConfig:
     APP_CONFIG_DIR = _xdg_config / AppMeta.NAME
     SETTINGS_FILE = APP_CONFIG_DIR / "settings.json"
     APP_DATA_DIR = _xdg_data / AppMeta.NAME
-    DESKTOP_FILE = (
-        Path.home() / ".local" / "share" / "applications" / f"{AppMeta.NAME}.desktop"
-    )
 
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
     ASSETS_DIR = PROJECT_ROOT / "assets"

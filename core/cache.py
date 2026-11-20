@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 from config.constants import PathConfig
+from config.storage import atomic_write_text
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_metrics import ScrapeMetrics
 from core.time_utils import try_parse_utc
@@ -19,6 +18,20 @@ from core.time_utils import try_parse_utc
 logger = logging.getLogger(__name__)
 
 _CACHE_VERSION = 1
+# ForexFactory used the key "ig" (an earlier provider) in files and records.
+_LEGACY_SOURCE_KEYS = {"ig": CalendarSource.FOREXFACTORY}
+
+
+def _source_from_key(value: object) -> CalendarSource:
+    text = str(value)
+    return _LEGACY_SOURCE_KEYS.get(text) or CalendarSource(text)
+
+
+def _legacy_path(source: CalendarSource) -> Path | None:
+    for key, legacy_source in _LEGACY_SOURCE_KEYS.items():
+        if legacy_source == source:
+            return PathConfig.APP_DATA_DIR / f"calendar_{key}.json"
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,8 +72,8 @@ def _event_from_dict(value: object, expected_source: CalendarSource) -> Calendar
     if not isinstance(value, dict):
         raise TypeError("cached event must be an object")
 
-    source = CalendarSource(str(value.get("source", expected_source.value)))
-    if source.value != expected_source.value:
+    source = _source_from_key(value.get("source", expected_source.value))
+    if source != expected_source:
         raise ValueError("cached event source mismatch")
 
     event_name = str(value.get("event_name", "")).strip()
@@ -100,7 +113,9 @@ class CalendarCache:
         path = self._path(source)
         with self._lock:
             if not path.exists():
-                return None
+                path = _legacy_path(source)
+                if path is None or not path.exists():
+                    return None
             try:
                 with open(path, "r", encoding="utf-8") as handle:
                     payload = json.load(handle)
@@ -108,7 +123,7 @@ class CalendarCache:
                     raise TypeError("cache root must be an object")
                 if payload.get("version") != _CACHE_VERSION:
                     raise ValueError("unsupported cache version")
-                if str(payload.get("source", "")) != source.value:
+                if _source_from_key(payload.get("source", "")) != source:
                     raise ValueError("cache source mismatch")
 
                 raw_events = payload.get("events")
@@ -168,34 +183,21 @@ class CalendarCache:
             "events": [_event_to_dict(event) for event in events],
         }
 
-        temp_path: Path | None = None
         with self._lock:
             try:
-                PathConfig.ensure_dirs()
-                with tempfile.NamedTemporaryFile(
-                    mode="w",
-                    encoding="utf-8",
-                    dir=PathConfig.APP_DATA_DIR,
-                    prefix=f".calendar_{source.value}.",
-                    suffix=".tmp",
-                    delete=False,
-                ) as handle:
-                    temp_path = Path(handle.name)
-                    json.dump(
-                        payload, handle, ensure_ascii=False, separators=(",", ":")
-                    )
-                    handle.flush()
-                    os.fsync(handle.fileno())
-
-                os.replace(temp_path, self._path(source))
+                atomic_write_text(
+                    self._path(source),
+                    json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                )
             except OSError as exc:
                 logger.error("Errore salvataggio cache %s: %s", source.value, exc)
-                if temp_path is not None:
-                    try:
-                        temp_path.unlink(missing_ok=True)
-                    except OSError:
-                        logger.exception("Impossibile eliminare cache temporanea")
                 return False
+            legacy = _legacy_path(source)
+            if legacy is not None:
+                try:
+                    legacy.unlink(missing_ok=True)
+                except OSError as exc:
+                    logger.warning("Cache precedente non rimossa: %s", exc)
 
         logger.debug("Cache %s salvata con %d eventi", source.value, len(events))
         return True

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from config.constants import PathConfig
 from config.settings import Settings
-from core import scraper_fxstreet, scraper_ig
+from core import scraper_fxstreet, scraper_forexfactory
 from core.scraper_utils import save_debug_json
 from core.time_utils import try_parse_utc
 from ui.runtime import CalendarRuntime
@@ -54,15 +54,15 @@ def test_debug_json_uses_canonical_application_data_path(monkeypatch, tmp_path) 
 def test_scraper_parsers_skip_bad_records_but_surface_internal_bugs(
     monkeypatch,
 ) -> None:
-    assert scraper_ig._parse_ff_events([None, {}]) == []
+    assert scraper_forexfactory._parse_ff_events([None, {}]) == []
     assert scraper_fxstreet._parse_api_events([None, {}]) == []
 
     def broken_clean_string(value):
         raise RuntimeError("programming bug")
 
-    monkeypatch.setattr(scraper_ig, "clean_string", broken_clean_string)
+    monkeypatch.setattr(scraper_forexfactory, "clean_string", broken_clean_string)
     with pytest.raises(RuntimeError, match="programming bug"):
-        scraper_ig._parse_ff_events(
+        scraper_forexfactory._parse_ff_events(
             [{"date": "2026-08-20T08:30:00-04:00", "title": "Event"}]
         )
 

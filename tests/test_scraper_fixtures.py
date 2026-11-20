@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from core import scraper_fxstreet, scraper_ig
+from core import scraper_fxstreet, scraper_forexfactory
 from core.models import CalendarSource, ImpactLevel
 
 
@@ -17,7 +17,7 @@ def _load(name: str):
 
 def test_forexfactory_production_fixture_preserves_parser_contract() -> None:
     payload = _load("forexfactory_api_anonymized.json")
-    events = scraper_ig._parse_ff_events(payload)
+    events = scraper_forexfactory._parse_ff_events(payload)
 
     assert len(events) == len(payload) == 5
     assert events[0].source == CalendarSource.FOREXFACTORY

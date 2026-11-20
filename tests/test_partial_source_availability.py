@@ -4,20 +4,9 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from config.constants import PathConfig
-from config.settings import Settings
 from core import app_controller as app_controller_module
 from core.app_controller import AppController
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
-
-
-def _redirect_paths(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path / "config")
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(
-        PathConfig,
-        "SETTINGS_FILE",
-        tmp_path / "config" / "settings.json",
-    )
 
 
 def _future_event() -> CalendarEvent:
@@ -40,11 +29,10 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
     monkeypatch,
     tmp_path,
 ) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
 
     monkeypatch.setattr(
         app_controller_module,
-        "scrape_ig_calendar",
+        "scrape_forexfactory_calendar",
         lambda debug=False, **kwargs: [_future_event()],
     )
 
@@ -55,7 +43,7 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
         app_controller_module, "scrape_fxstreet_calendar", fail_fxstreet
     )
 
-    controller = AppController(Settings())
+    controller = AppController()
     notifications: list[tuple[str, dict]] = []
     completed = threading.Event()
 
@@ -85,7 +73,7 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
         refreshed = [
             payload
             for name, payload in notifications
-            if name == "calendar_refreshed" and payload.get("source") == "ig"
+            if name == "calendar_refreshed" and payload.get("source") == "forexfactory"
         ]
         failed = [
             payload
@@ -97,7 +85,7 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
         assert len(failed) == 1
         assert "FXStreet unavailable" in failed[0]["error"]
 
-        cache_path = PathConfig.APP_DATA_DIR / "calendar_ig.json"
+        cache_path = PathConfig.APP_DATA_DIR / "calendar_forexfactory.json"
         assert cache_path.exists()
         assert not (PathConfig.APP_DATA_DIR / "calendar_fxstreet.json").exists()
     finally:

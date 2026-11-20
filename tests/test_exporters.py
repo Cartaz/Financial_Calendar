@@ -7,7 +7,7 @@ from core.exporters import render_csv, render_ics, write_export
 
 def _event() -> dict[str, str]:
     return {
-        "source": "ig",
+        "source": "forexfactory",
         "date": "21/08/2026",
         "time": "14:30",
         "country": "USA",

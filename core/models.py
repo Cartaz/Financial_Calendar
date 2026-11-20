@@ -7,14 +7,9 @@ from enum import Enum
 
 
 class CalendarSource(Enum):
-    """Economic-calendar data source.
+    """Economic-calendar data source."""
 
-    ``IG`` remains an alias for the historical internal key so existing
-    persisted state and bridge bindings keep working.
-    """
-
-    FOREXFACTORY = "ig"
-    IG = "ig"
+    FOREXFACTORY = "forexfactory"
     FXSTREET = "fxstreet"
 
 

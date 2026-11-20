@@ -4,86 +4,48 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 import threading
 from dataclasses import asdict, dataclass, field, fields
 from datetime import date
-from pathlib import Path
 from typing import Any
 
-from config.constants import CalendarDefaults, PathConfig
+from config.constants import COLUMNS, SOURCES, CalendarDefaults, PathConfig
+from config.storage import atomic_write_text
 from config.timezones import validate_timezone
 
 logger = logging.getLogger(__name__)
 
 _AUTO_REFRESH_MINUTES = {0, 5, 15, 30, 60}
 _NOTIFICATION_LEAD_MINUTES = {0, 5, 15, 30, 60}
-_IG_SORT_KEYS = {
-    "",
-    "date",
-    "time",
-    "country",
-    "impact",
-    "event_name",
-    "actual",
-    "forecast",
-    "previous",
-}
-_FXSTREET_SORT_KEYS = {
-    "",
-    "date",
-    "time",
-    "country",
-    "event_name",
-    "impact",
-    "actual",
-    "deviation",
-    "forecast",
-    "previous",
-}
-_COMBINED_SORT_KEYS = {
-    "",
-    "date",
-    "time",
-    "country",
-    "impact",
-    "event_name",
-    "source",
-    "actual",
-    "forecast",
-    "previous",
-    "deviation",
-}
+_SORT_KEYS = {source: {"", *columns} for source, columns in COLUMNS.items()}
 
 
 @dataclass(slots=True)
 class UserSettings:
-    ig_column_order: list[int] = field(
-        default_factory=lambda: list(range(len(CalendarDefaults.IG_COLUMNS)))
+    forexfactory_column_order: list[int] = field(
+        default_factory=lambda: list(range(len(COLUMNS["forexfactory"])))
     )
     fxstreet_column_order: list[int] = field(
-        default_factory=lambda: list(range(len(CalendarDefaults.FXSTREET_COLUMNS)))
+        default_factory=lambda: list(range(len(COLUMNS["fxstreet"])))
     )
-    combined_column_order: list[int] = field(default_factory=lambda: list(range(10)))
+    combined_column_order: list[int] = field(
+        default_factory=lambda: list(range(len(COLUMNS["combined"])))
+    )
 
-    ig_selected_region: str = "ALL"
-    ig_selected_impact: str = "ALL"
+    forexfactory_selected_region: str = "ALL"
+    forexfactory_selected_impact: str = "ALL"
     fxstreet_selected_region: str = "ALL"
     fxstreet_selected_impact: str = "ALL"
     combined_selected_region: str = "ALL"
     combined_selected_impact: str = "ALL"
 
-    last_refresh_ig: str = ""
-    last_refresh_fxstreet: str = ""
-
-    active_source: str = "ig"
+    active_source: str = "forexfactory"
     timezone_name: str = "local"
     selected_date: str = ""
     auto_refresh_minutes: int = 15
     high_notification_minutes: int = 0
-    ig_sort_key: str = ""
-    ig_sort_direction: str = "asc"
+    forexfactory_sort_key: str = ""
+    forexfactory_sort_direction: str = "asc"
     fxstreet_sort_key: str = ""
     fxstreet_sort_direction: str = "asc"
     combined_sort_key: str = ""
@@ -92,6 +54,17 @@ class UserSettings:
 
 
 _SETTINGS_FIELDS = {item.name for item in fields(UserSettings)}
+
+
+def _migrate_legacy_keys(raw: dict) -> dict:
+    """Map ForexFactory's former "ig" key (an earlier provider) to "forexfactory"."""
+    migrated = dict(raw)
+    for key, value in raw.items():
+        if key.startswith("ig_"):
+            migrated.setdefault("forexfactory_" + key.removeprefix("ig_"), value)
+    if migrated.get("active_source") == "ig":
+        migrated["active_source"] = "forexfactory"
+    return migrated
 
 
 def _valid_column_order(value: object, count: int) -> list[int]:
@@ -134,12 +107,10 @@ def _normalize_minutes(value: object, allowed: set[int], label: str) -> int:
 
 
 def _normalize_setting(key: str, value: Any) -> Any:
-    if key == "ig_column_order":
-        return _valid_column_order(value, len(CalendarDefaults.IG_COLUMNS))
-    if key == "fxstreet_column_order":
-        return _valid_column_order(value, len(CalendarDefaults.FXSTREET_COLUMNS))
-    if key == "combined_column_order":
-        return _valid_column_order(value, 10)
+    if key.endswith("_column_order"):
+        return _valid_column_order(
+            value, len(COLUMNS[key.removesuffix("_column_order")])
+        )
 
     if key.endswith("_selected_region"):
         text = str(value)
@@ -151,12 +122,9 @@ def _normalize_setting(key: str, value: Any) -> Any:
         allowed = {"ALL", *CalendarDefaults.IMPACT_LEVELS}
         return text if text in allowed else "ALL"
 
-    if key in {"last_refresh_ig", "last_refresh_fxstreet"}:
-        return str(value)
-
     if key == "active_source":
         text = str(value)
-        return text if text in {"ig", "fxstreet", "combined"} else "ig"
+        return text if text in SOURCES else "forexfactory"
 
     if key == "timezone_name":
         return _normalize_timezone(value)
@@ -172,23 +140,11 @@ def _normalize_setting(key: str, value: Any) -> Any:
             value, _NOTIFICATION_LEAD_MINUTES, "notification lead"
         )
 
-    if key == "ig_sort_key":
+    if key.endswith("_sort_key"):
         text = str(value)
-        return text if text in _IG_SORT_KEYS else ""
+        return text if text in _SORT_KEYS[key.removesuffix("_sort_key")] else ""
 
-    if key == "fxstreet_sort_key":
-        text = str(value)
-        return text if text in _FXSTREET_SORT_KEYS else ""
-
-    if key == "combined_sort_key":
-        text = str(value)
-        return text if text in _COMBINED_SORT_KEYS else ""
-
-    if key in {
-        "ig_sort_direction",
-        "fxstreet_sort_direction",
-        "combined_sort_direction",
-    }:
+    if key.endswith("_sort_direction"):
         text = str(value)
         return text if text in {"asc", "desc"} else "asc"
 
@@ -221,6 +177,7 @@ class Settings:
                     raw = json.load(handle)
                 if not isinstance(raw, dict):
                     raise TypeError("settings root must be an object")
+                raw = _migrate_legacy_keys(raw)
 
                 defaults = UserSettings()
                 normalized: dict[str, Any] = {}
@@ -238,11 +195,17 @@ class Settings:
                 legacy_region = raw.get("selected_region")
                 legacy_impact = raw.get("selected_impact")
                 if legacy_region is not None:
-                    for key in ("ig_selected_region", "fxstreet_selected_region"):
+                    for key in (
+                        "forexfactory_selected_region",
+                        "fxstreet_selected_region",
+                    ):
                         if key not in raw:
                             normalized[key] = _normalize_setting(key, legacy_region)
                 if legacy_impact is not None:
-                    for key in ("ig_selected_impact", "fxstreet_selected_impact"):
+                    for key in (
+                        "forexfactory_selected_impact",
+                        "fxstreet_selected_impact",
+                    ):
                         if key not in raw:
                             normalized[key] = _normalize_setting(key, legacy_impact)
 
@@ -262,34 +225,16 @@ class Settings:
                 self._data = UserSettings()
 
     def _save_locked(self) -> bool:
-        temp_path: Path | None = None
         try:
-            PathConfig.ensure_dirs()
-            payload = asdict(self._data)
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                dir=PathConfig.APP_CONFIG_DIR,
-                prefix=".settings.",
-                suffix=".tmp",
-                delete=False,
-            ) as handle:
-                temp_path = Path(handle.name)
-                json.dump(payload, handle, indent=2, ensure_ascii=False)
-                handle.flush()
-                os.fsync(handle.fileno())
-
-            os.replace(temp_path, PathConfig.SETTINGS_FILE)
-            logger.debug("Impostazioni salvate in %s", PathConfig.SETTINGS_FILE)
-            return True
+            atomic_write_text(
+                PathConfig.SETTINGS_FILE,
+                json.dumps(asdict(self._data), indent=2, ensure_ascii=False),
+            )
         except OSError as exc:
             logger.error("Errore nel salvataggio delle impostazioni: %s", exc)
-            if temp_path is not None:
-                try:
-                    temp_path.unlink(missing_ok=True)
-                except OSError:
-                    logger.exception("Impossibile eliminare il file temporaneo")
             return False
+        logger.debug("Impostazioni salvate in %s", PathConfig.SETTINGS_FILE)
+        return True
 
     def save(self) -> bool:
         with self._lock:
@@ -332,12 +277,3 @@ class Settings:
                 for key, (previous, _) in changed.items():
                     setattr(self._data, key, previous)
         return saved
-
-    def reset(self) -> bool:
-        with self._lock:
-            previous = self._data
-            self._data = UserSettings()
-            saved = self._save_locked()
-            if not saved:
-                self._data = previous
-            return saved

@@ -1,23 +1,12 @@
 from __future__ import annotations
 
-import threading
-from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
 
-from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.calendar_view import CalendarViewService
-
-
-def _redirect_paths(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path / "config")
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(
-        PathConfig, "SETTINGS_FILE", tmp_path / "config" / "settings.json"
-    )
 
 
 def _future_event(
@@ -39,13 +28,12 @@ def _future_event(
 
 
 def test_controller_and_view_start_with_cached_data(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     refreshed_at = "2026-08-21T10:30:00+00:00"
     cache = CalendarCache()
     assert cache.save(CalendarSource.FOREXFACTORY, [_future_event()], refreshed_at)
 
     settings = Settings()
-    controller = AppController(settings)
+    controller = AppController()
     view = CalendarViewService(controller, settings)
     try:
         assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "cache"
@@ -61,7 +49,6 @@ def test_controller_and_view_start_with_cached_data(monkeypatch, tmp_path) -> No
 
 
 def test_failed_refresh_keeps_cached_events_available(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     refreshed_at = "2026-08-21T10:30:00+00:00"
     assert CalendarCache().save(
         CalendarSource.FOREXFACTORY,
@@ -69,17 +56,11 @@ def test_failed_refresh_keeps_cached_events_available(monkeypatch, tmp_path) -> 
         refreshed_at,
     )
 
-    controller = AppController(Settings())
-    future: Future = Future()
-    future.set_exception(RuntimeError("offline"))
-    refreshing = threading.Event()
-    refreshing.set()
+    controller = AppController()
 
     try:
         controller._complete_refresh(  # noqa: SLF001 - deterministic lifecycle test
-            future,
-            CalendarSource.FOREXFACTORY,
-            refreshing,
+            CalendarSource.FOREXFACTORY, error=RuntimeError("offline")
         )
 
         assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "cache"
@@ -94,27 +75,18 @@ def test_failed_refresh_keeps_cached_events_available(monkeypatch, tmp_path) -> 
 def test_successful_refresh_replaces_cache_and_uses_utc_timestamp(
     monkeypatch, tmp_path
 ) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
-    settings = Settings()
-    controller = AppController(settings)
-    future: Future = Future()
-    future.set_result([_future_event()])
-    refreshing = threading.Event()
-    refreshing.set()
+    controller = AppController()
 
     try:
         controller._complete_refresh(  # noqa: SLF001 - deterministic lifecycle test
-            future,
-            CalendarSource.FOREXFACTORY,
-            refreshing,
+            CalendarSource.FOREXFACTORY, events=[_future_event()]
         )
 
-        assert refreshing.is_set() is False
+        assert not controller.is_refreshing(CalendarSource.FOREXFACTORY)
         assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "network"
         refreshed_at = controller.get_last_refresh(CalendarSource.FOREXFACTORY)
         parsed = datetime.fromisoformat(refreshed_at)
         assert parsed.utcoffset() == timedelta(0)
-        assert settings.get("last_refresh_ig") == refreshed_at
 
         snapshot = CalendarCache().load(CalendarSource.FOREXFACTORY)
         assert snapshot is not None
