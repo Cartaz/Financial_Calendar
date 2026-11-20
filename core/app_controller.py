@@ -7,10 +7,10 @@ import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Callable, Iterable
-from config.timezones import resolve_timezone
 
 from config.constants import CalendarDefaults
 from config.settings import Settings
+from config.timezones import resolve_timezone
 from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_fxstreet import scrape_fxstreet_calendar
@@ -102,7 +102,7 @@ class AppController:
     def is_refreshing(self, source: CalendarSource) -> bool:
         event = (
             self._refreshing_ig
-            if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY)
+            if source == CalendarSource.FOREXFACTORY
             else self._refreshing_fxstreet
         )
         return event.is_set()
@@ -238,17 +238,13 @@ class AppController:
         region: str = "ALL",
         impact: str = "ALL",
         date: str = "",
-        tz_offset_hours: float = 0.0,
-        timezone_name: str = "",
+        timezone_name: str = "UTC",
     ) -> list[CalendarEvent]:
         with self._data_lock:
             events = list(self._events_by_source[self._source_key(source)])
 
         events = self._filter_past_events(events)
-        if timezone_name:
-            events = self._convert_events_timezone(events, timezone_name)
-        else:
-            events = self._convert_events_tz(events, tz_offset_hours)
+        events = self._convert_events_timezone(events, timezone_name)
 
         if date:
             events = [event for event in events if event.date == date]
@@ -288,10 +284,6 @@ class AppController:
                 kept.append(event)
         return kept
 
-    @staticmethod
-    def _timezone_from_spec(timezone_name: str) -> tzinfo:
-        return resolve_timezone(timezone_name or "UTC")
-
     def get_source_error(self, source: CalendarSource) -> str:
         with self._data_lock:
             return self._errors[source.value]
@@ -328,19 +320,11 @@ class AppController:
         return converted
 
     @staticmethod
-    def _convert_events_tz(
-        events: list[CalendarEvent],
-        offset_hours: float,
-    ) -> list[CalendarEvent]:
-        target_tz = timezone(timedelta(hours=offset_hours))
-        return AppController._convert_events_to_zone(events, target_tz)
-
-    @staticmethod
     def _convert_events_timezone(
         events: list[CalendarEvent],
         timezone_name: str,
     ) -> list[CalendarEvent]:
-        target_tz = AppController._timezone_from_spec(timezone_name)
+        target_tz = resolve_timezone(timezone_name or "UTC")
         return AppController._convert_events_to_zone(events, target_tz)
 
     def get_last_refresh(self, source: CalendarSource) -> str:
@@ -352,7 +336,7 @@ class AppController:
 
         key = (
             "last_refresh_ig"
-            if source in (CalendarSource.IG, CalendarSource.FOREXFACTORY)
+            if source == CalendarSource.FOREXFACTORY
             else "last_refresh_fxstreet"
         )
         return str(self.settings.get(key))

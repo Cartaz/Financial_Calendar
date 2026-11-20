@@ -32,21 +32,21 @@ def test_forexfactory_minus_0400_normalizes_to_utc() -> None:
 
 def test_forexfactory_utc_converts_to_cest_offset() -> None:
     _, _, utc_text = parse_ig_date("2026-08-20T08:30:00-04:00")
-    converted = AppController._convert_events_tz([_event(utc_text)], 2.0)
+    converted = AppController._convert_events_timezone([_event(utc_text)], "UTC+02:00")
     assert converted[0].time == "14:30"
     assert converted[0].date == "20/08/2026"
 
 
 def test_forexfactory_utc_converts_to_cet_offset() -> None:
     _, _, utc_text = parse_ig_date("2026-01-20T08:30:00-05:00")
-    converted = AppController._convert_events_tz([_event(utc_text)], 1.0)
+    converted = AppController._convert_events_timezone([_event(utc_text)], "UTC+01:00")
     assert converted[0].time == "14:30"
     assert converted[0].date == "20/01/2026"
 
 
 def test_timezone_conversion_crosses_midnight() -> None:
     _, _, utc_text = parse_ig_date("2026-08-20T23:30:00-04:00")
-    converted = AppController._convert_events_tz([_event(utc_text)], 2.0)
+    converted = AppController._convert_events_timezone([_event(utc_text)], "UTC+02:00")
     assert converted[0].time == "05:30"
     assert converted[0].date == "21/08/2026"
 
@@ -83,4 +83,4 @@ def test_naive_timestamp_is_rejected_at_ingest() -> None:
 
 def test_controller_defensively_handles_naive_timestamp() -> None:
     event = _event("2026-08-20T14:30:00")
-    assert AppController._convert_events_tz([event], 2.0) == [event]
+    assert AppController._convert_events_timezone([event], "UTC+02:00") == [event]

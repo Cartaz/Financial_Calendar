@@ -10,8 +10,6 @@ class AppMeta:
     NAME = "financial_calendar"
     DISPLAY_NAME = "Calendario Finanziario"
     VERSION = "1.1.0"
-    AUTHOR = "Cartaz"
-    DESCRIPTION = "Calendari economici ForexFactory/Faireconomy e FXStreet"
     ICON_NAME = "financial-calendar"
 
 
@@ -96,9 +94,6 @@ class PathConfig:
     APP_CONFIG_DIR = _xdg_config / AppMeta.NAME
     SETTINGS_FILE = APP_CONFIG_DIR / "settings.json"
     APP_DATA_DIR = _xdg_data / AppMeta.NAME
-    DESKTOP_FILE = (
-        Path.home() / ".local" / "share" / "applications" / f"{AppMeta.NAME}.desktop"
-    )
 
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
     ASSETS_DIR = PROJECT_ROOT / "assets"

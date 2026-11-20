@@ -44,15 +44,3 @@ class ScraperParseError(ScraperError):
     """Errore durante il parsing del contenuto HTML."""
 
     pass
-
-
-class ConfigError(AppError):
-    """Errore nella configurazione dell'applicazione."""
-
-    pass
-
-
-class ConfigValidationError(ConfigError):
-    """Errore di validazione di un valore di configurazione."""
-
-    pass

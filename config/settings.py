@@ -332,12 +332,3 @@ class Settings:
                 for key, (previous, _) in changed.items():
                     setattr(self._data, key, previous)
         return saved
-
-    def reset(self) -> bool:
-        with self._lock:
-            previous = self._data
-            self._data = UserSettings()
-            saved = self._save_locked()
-            if not saved:
-                self._data = previous
-            return saved

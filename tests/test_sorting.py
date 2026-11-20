@@ -8,7 +8,9 @@ def _rows(values):
 
 
 def test_economic_values_sort_by_signed_magnitude() -> None:
-    rows = _rows(["0.3%", "0.25%", "", "-0.5%", "-1.2%", "1.0%", "10K", "9.5K", "-0.1%"])
+    rows = _rows(
+        ["0.3%", "0.25%", "", "-0.5%", "-1.2%", "1.0%", "10K", "9.5K", "-0.1%"]
+    )
     ascending = [row["actual"] for row in sort_rows(rows, "actual", False)]
     assert ascending == [
         "-1.2%",
