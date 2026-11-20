@@ -478,3 +478,23 @@ def test_maximized_window_keeps_its_normal_geometry(app, backend):
         "height": 600,
         "maximized": True,
     }
+
+
+def test_window_maximized_right_away_keeps_the_default_normal_size(app, backend):
+    controller, settings = backend
+    window = CalendarWindow(controller, settings, autostart=False)
+    try:
+        window.show()
+        window.root.showMaximized()
+        spin(app, lambda: window.root.visibility().name == "Maximized")
+        # Saved as-is at shutdown, when the hidden window's geometry is unreliable.
+        normal = window._normal_geometry
+        assert normal is not None
+        assert (normal.width(), normal.height()) == (1360, 820)
+    finally:
+        window.root.close()
+        window.shutdown()
+        window.engine.deleteLater()
+        app.processEvents()
+    saved = json.loads(settings.get("window_geometry")[4:])
+    assert (saved["width"], saved["height"], saved["maximized"]) == (1360, 820, True)

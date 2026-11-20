@@ -7,6 +7,7 @@ import logging
 import signal
 import socket
 import sys
+from typing import Callable
 
 from PySide6.QtCore import QSocketNotifier
 from PySide6.QtWidgets import QApplication
@@ -23,11 +24,12 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _quit_on_termination_signals(app: QApplication) -> None:
+def _quit_on_termination_signals(app: QApplication) -> Callable[[], None]:
     """Turn SIGTERM/SIGINT into a normal Qt quit so shutdown runs in order.
 
     Python only runs signal handlers between bytecodes, which never happens
     while Qt's C++ event loop is idle. The wakeup socket makes the loop notice.
+    Returns a function that restores the default handlers once the loop ends.
     """
     receiver, sender = socket.socketpair()
     receiver.setblocking(False)
@@ -35,6 +37,13 @@ def _quit_on_termination_signals(app: QApplication) -> None:
     signal.set_wakeup_fd(sender.fileno())
     for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, lambda *_: None)
+
+    def restore_default_signals() -> None:
+        # Once the loop is quitting nothing reads the socket any more: a
+        # further signal must terminate as usual, e.g. if shutdown hangs.
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            signal.signal(signum, signal.SIG_DFL)
+        signal.set_wakeup_fd(-1)
 
     notifier = QSocketNotifier(receiver.fileno(), QSocketNotifier.Type.Read, app)
 
@@ -45,13 +54,11 @@ def _quit_on_termination_signals(app: QApplication) -> None:
             return
         if received:
             logging.getLogger(__name__).info("Segnale di chiusura ricevuto")
-            # A second signal must still terminate, e.g. if shutdown hangs.
-            for signum in (signal.SIGTERM, signal.SIGINT):
-                signal.signal(signum, signal.SIG_DFL)
             app.quit()
 
     notifier.activated.connect(on_signal)
     app._signal_sockets = (receiver, sender)  # keep the pair alive with the app
+    return restore_default_signals
 
 
 def main() -> int:
@@ -72,7 +79,7 @@ def main() -> int:
     app.setApplicationVersion(AppMeta.VERSION)
     app.setDesktopFileName("financial_calendar")
     app.setQuitOnLastWindowClosed(True)
-    _quit_on_termination_signals(app)
+    restore_default_signals = _quit_on_termination_signals(app)
 
     controller = AppController(debug=args.debug)
     app.aboutToQuit.connect(controller.begin_shutdown)
@@ -80,6 +87,7 @@ def main() -> int:
     try:
         window = CalendarWindow(controller, settings, debug=args.debug)
     except Exception:
+        restore_default_signals()
         logging.getLogger(__name__).exception("Impossibile inizializzare la UI")
         controller.shutdown()
         settings.save()
@@ -89,6 +97,7 @@ def main() -> int:
     try:
         return app.exec()
     finally:
+        restore_default_signals()
         window.shutdown()
 
 

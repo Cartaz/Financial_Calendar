@@ -10,7 +10,7 @@
 - SIGTERM e Ctrl+C chiudono in modo ordinato, salvando la geometria.
 
 ### Manutenzione
-- La sorgente ForexFactory usa la chiave `forexfactory` al posto della storica `ig`; impostazioni e cache esistenti sono migrate automaticamente.
+- La sorgente ForexFactory usa la chiave `forexfactory` al posto della storica `ig`; impostazioni e cache esistenti sono migrate automaticamente. Nel CSV esportato la colonna `source` vale ora `forexfactory` invece di `ig`; gli UID ICS restano invariati.
 - Rimossi codice morto e un secondo meccanismo di riordino colonne non raggiungibile dall'utente; colonne, sorgenti ed etichette definite una sola volta.
 - Scrittura atomica condivisa, stato del controller indicizzato per sorgente, timestamp di refresh solo nella cache.
 - Test isolati da `tests/conftest.py`; dipendenze di sviluppo in `requirements-dev.txt`. Documentata la copertura settimanale di ForexFactory.

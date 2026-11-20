@@ -86,6 +86,8 @@ class CalendarWindow(QObject):
             self.root.visibilityChanged,
         ):
             changed.connect(self._track_geometry)
+        # Default size from Main.qml, replaced by a saved geometry if any.
+        self._normal_geometry = self.root.geometry()
         self._restore_geometry()
         QApplication.instance().aboutToQuit.connect(self.stop)
         if autostart:
