@@ -91,10 +91,15 @@ def _fold_ics_line(line: str) -> list[str]:
     return folded
 
 
+# UIDs keep ForexFactory's former key so re-imported calendars do not duplicate.
+_UID_SOURCE_KEYS = {"forexfactory": "ig"}
+
+
 def _event_uid(event: Mapping[str, object], dt_utc: datetime) -> str:
+    source = _text(event.get("source"))
     stable = "|".join(
         [
-            _text(event.get("source")),
+            _UID_SOURCE_KEYS.get(source, source),
             dt_utc.isoformat(),
             _text(event.get("country")),
             _text(event.get("event_name")),

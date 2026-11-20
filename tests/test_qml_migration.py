@@ -60,8 +60,8 @@ def backend(monkeypatch, tmp_path):
     settings = Settings()
     assert settings.set_many(
         {
-            "ig_selected_region": "ALL",
-            "ig_selected_impact": "ALL",
+            "forexfactory_selected_region": "ALL",
+            "forexfactory_selected_impact": "ALL",
             "fxstreet_selected_region": "ALL",
             "fxstreet_selected_impact": "ALL",
             "combined_selected_region": "ALL",
@@ -191,7 +191,7 @@ def test_qml_models_interaction_export_and_geometry(app, backend, tmp_path):
         with output.open() as stream:
             rows = list(csv.DictReader(stream))
         assert len(rows) == 2
-        assert {row["source"] for row in rows} == {"ig", "fxstreet"}
+        assert {row["source"] for row in rows} == {"forexfactory", "fxstreet"}
         assert all(row["actual"] == "123K" for row in rows)
         assert rows[0]["utc_dt"] == window.calendar.table.rows[0]["utc_dt"]
         assert rows[0]["date"] == window.calendar.table.rows[0]["date"]
@@ -294,7 +294,7 @@ def test_header_mouse_drag_persists_visual_order(app, backend):
                 window.calendar.table.columns[2] == "date" and not window.calendar.busy
             ),
         )
-        assert backend[1].get("ig_column_order")[:3] == [1, 2, 0]
+        assert backend[1].get("forexfactory_column_order")[:3] == [1, 2, 0]
         assert window.calendar.state["sort_key"] == ""
         date_cell = visual_item(window.root.contentItem(), "headerCell2")
         date_cell.forceActiveFocus()
@@ -305,7 +305,7 @@ def test_header_mouse_drag_persists_visual_order(app, backend):
                 window.calendar.table.columns[1] == "date" and not window.calendar.busy
             ),
         )
-        assert backend[1].get("ig_column_order")[:3] == [1, 0, 2]
+        assert backend[1].get("forexfactory_column_order")[:3] == [1, 0, 2]
         window.calendar.selectSource("fxstreet")
         spin(
             app,
@@ -314,11 +314,11 @@ def test_header_mouse_drag_persists_visual_order(app, backend):
                 and not window.calendar.busy
             ),
         )
-        window.calendar.selectSource("ig")
+        window.calendar.selectSource("forexfactory")
         spin(
             app,
             lambda: (
-                window.calendar.state["active_source"] == "ig"
+                window.calendar.state["active_source"] == "forexfactory"
                 and not window.calendar.busy
             ),
         )
@@ -408,7 +408,7 @@ def test_commands_queued_after_a_source_switch_apply_to_the_new_source(app, back
     adapter = CalendarAdapter(controller, settings, queue)
     try:
         spin(app, lambda: not queue.pending)
-        assert adapter.state["active_source"] == "ig"
+        assert adapter.state["active_source"] == "forexfactory"
         # Both commands are queued before the first snapshot comes back.
         adapter.selectSource("fxstreet")
         adapter.setFilter("region", "USA")
@@ -417,10 +417,10 @@ def test_commands_queued_after_a_source_switch_apply_to_the_new_source(app, back
         assert adapter.state["active_source"] == "fxstreet"
         assert adapter.state["region"] == "USA"
         assert settings.get("fxstreet_selected_region") == "USA"
-        assert settings.get("ig_selected_region") == "ALL"
+        assert settings.get("forexfactory_selected_region") == "ALL"
         # Index 3 of the ForexFactory header shown when queued is "impact".
         assert adapter.table.columns[0] == "impact"
-        assert settings.get("ig_column_order") == list(range(8))
+        assert settings.get("forexfactory_column_order") == list(range(8))
     finally:
         adapter.stop()
         queue.shutdown()

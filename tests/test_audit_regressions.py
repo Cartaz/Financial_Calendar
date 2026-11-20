@@ -33,7 +33,7 @@ def test_fast_refresh_completion_does_not_persist_on_caller_thread(
     caller = threading.get_ident()
     saved_on = []
     monkeypatch.setattr(
-        app_controller, "scrape_ig_calendar", lambda **kwargs: [event()]
+        app_controller, "scrape_forexfactory_calendar", lambda **kwargs: [event()]
     )
     controller = app_controller.AppController()
     real_submit = controller._executor.submit
@@ -86,7 +86,7 @@ def test_excessively_nested_json_is_rejected_without_startup_crash(
         path = PathConfig.SETTINGS_FILE
         read = Settings().load
     else:
-        path = PathConfig.APP_DATA_DIR / "calendar_ig.json"
+        path = PathConfig.APP_DATA_DIR / "calendar_forexfactory.json"
 
         def read():
             return CalendarCache().load(CalendarSource.FOREXFACTORY)

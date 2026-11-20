@@ -9,7 +9,7 @@ from enum import Enum
 class CalendarSource(Enum):
     """Economic-calendar data source."""
 
-    FOREXFACTORY = "ig"
+    FOREXFACTORY = "forexfactory"
     FXSTREET = "fxstreet"
 
 

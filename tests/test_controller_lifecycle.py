@@ -30,7 +30,7 @@ def test_shutdown_suppresses_late_worker_notifications(monkeypatch, tmp_path) ->
         release.wait(timeout=2)
         return [_event()]
 
-    monkeypatch.setattr(app_controller, "scrape_ig_calendar", slow_scraper)
+    monkeypatch.setattr(app_controller, "scrape_forexfactory_calendar", slow_scraper)
 
     controller = app_controller.AppController()
     notifications = []

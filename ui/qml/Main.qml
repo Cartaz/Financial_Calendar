@@ -18,7 +18,7 @@ ApplicationWindow {
     font.family: Theme.font
     font.pixelSize: 13
     property string feedback: ""
-    Shortcut { sequence: "Ctrl+R"; onActivated: root.calendar.refresh("ig") }
+    Shortcut { sequence: "Ctrl+R"; onActivated: root.calendar.refresh("forexfactory") }
     Shortcut { sequence: "Ctrl+F"; onActivated: root.calendar.refresh("fxstreet") }
     Shortcut { sequence: "Ctrl+Q"; onActivated: Qt.quit() }
     Connections { target: root.calendar; function onMessage(message) { root.feedback = message; toastTimer.restart() } }

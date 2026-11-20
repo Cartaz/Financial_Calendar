@@ -1,7 +1,6 @@
 """ForexFactory economic-calendar scraper via the Faireconomy JSON feed.
 
-The internal source key remains ``ig`` for compatibility with existing
-settings and UI bindings, but the data provenance is ForexFactory/Faireconomy.
+The public feed only covers the current week (Sunday to Saturday).
 Production refreshes never fall back to fabricated sample events.
 """
 
@@ -15,9 +14,9 @@ from config.constants import CalendarDefaults
 from core.exceptions import ScraperConnectionError, ScraperParseError
 from core.http_client import build_retry_session
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
-from core.scraper_ig_parser import parse_ig_date
 from core.scraper_metrics import RefreshTimer, ScrapeMetrics, response_retry_count
 from core.scraper_utils import clean_string, save_debug_json
+from core.time_utils import normalize_iso_to_utc
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +73,20 @@ _COUNTRY_MAP: dict[str, str] = {
 }
 
 
+def parse_forexfactory_date(date_str: str) -> tuple[str, str, str]:
+    """Return (HH:MM, DD/MM/YYYY, ISO) for a feed timestamp normalized to UTC.
+
+    The feed includes explicit offsets (for example ``-04:00``); converting
+    here gives every downstream consumer the same time basis.
+    """
+    dt_utc = normalize_iso_to_utc(date_str, "ForexFactory date")
+    return (
+        dt_utc.strftime("%H:%M"),
+        dt_utc.strftime("%d/%m/%Y"),
+        dt_utc.isoformat(),
+    )
+
+
 def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
     events: list[CalendarEvent] = []
 
@@ -92,7 +105,7 @@ def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
             impact = _IMPACT_MAP.get(impact_text, ImpactLevel.LOW)
 
             date_text = clean_string(item.get("date", ""))
-            time_str, date_display, utc_dt_str = parse_ig_date(date_text)
+            time_str, date_display, utc_dt_str = parse_forexfactory_date(date_text)
 
             country_code = clean_string(item.get("country", ""))
             region = _COUNTRY_MAP.get(country_code, country_code)
@@ -123,7 +136,7 @@ def _parse_ff_events(data: list[dict]) -> list[CalendarEvent]:
     return events
 
 
-def scrape_ig_calendar(
+def scrape_forexfactory_calendar(
     debug: bool = False, *, cancel_event=None
 ) -> list[CalendarEvent]:
     """Fetch and validate the ForexFactory/Faireconomy weekly calendar."""

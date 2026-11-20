@@ -14,11 +14,11 @@ class AppMeta:
 
 
 # Source keys shown by the UI; "combined" merges both feeds.
-SOURCES = {"ig": "ForexFactory", "fxstreet": "FXStreet", "combined": "Tutti"}
+SOURCES = {"forexfactory": "ForexFactory", "fxstreet": "FXStreet", "combined": "Tutti"}
 
 # Canonical column keys per source, in default display order.
 COLUMNS: dict[str, tuple[str, ...]] = {
-    "ig": (
+    "forexfactory": (
         "date",
         "time",
         "country",

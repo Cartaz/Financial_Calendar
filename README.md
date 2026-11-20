@@ -19,12 +19,12 @@ L'installer crea o ripara `.venv`, ripristina pip quando manca, installa `requir
 - Sorgenti separate e vista **Tutti**, con indicazione dei probabili duplicati senza eliminare eventi.
 - Copertura diversa per sorgente: ForexFactory pubblica solo la **settimana corrente** (domenica–sabato; non esiste un feed pubblico della settimana successiva), FXStreet i **prossimi 7 giorni**. Da venerdì sera a domenica la vista **Tutti** mostra quindi gli eventi futuri della sola FXStreet.
 - Filtri per paese, impatto e data; ricerca; Oggi, Domani e Prossime 24 ore. I fusi `local`, `UTC`, IANA (es. `Europe/Rome`) e offset (es. `UTC+02:00`) sono risolti in Python, anche attraverso cambi DST.
-- Ordinamento cliccando le intestazioni; trascinamento delle colonne oppure **Alt+← / Alt+→** sull'intestazione selezionata. Filtri, ordinamento e colonne sono salvati per sorgente.
+- Ordinamento cliccando le intestazioni (i valori economici come `-0.5%` o `9.5K` sono ordinati per grandezza numerica, quelli vuoti in fondo); trascinamento delle colonne oppure **Alt+← / Alt+→** sull'intestazione selezionata. Filtri, ordinamento e colonne sono salvati per sorgente.
 - Refresh indipendente, freschezza per sorgente, cache persistente, avvio offline e dati precedenti conservati in caso di errore. La vista combinata segnala la disponibilità parziale.
 - Auto-refresh a 5/15/30/60 minuti; 0 disattiva. **Ctrl+R** aggiorna ForexFactory, **Ctrl+F** FXStreet.
 - Countdown e prossimo evento HIGH. Notifiche HIGH facoltative a 5/15/30/60 minuti: un evento viene registrato come notificato soltanto dopo una consegna riuscita.
-- CSV e ICS della vista Python effettivamente mostrata, nell'ordine visibile. CSV protegge le formule mantenendo i valori economici; ICS comunica il numero effettivo di eventi scritti.
-- Log consultabile e copiabile, limitato a 250 messaggi; geometria della finestra persistente. **X** e **Ctrl+Q** terminano l'applicazione; nessuna tray.
+- CSV e ICS della vista Python effettivamente mostrata, con le righe nell'ordine visibile (le colonne del CSV hanno un ordine fisso). CSV protegge le formule mantenendo i valori economici; ICS comunica il numero effettivo di eventi scritti.
+- Log consultabile e copiabile, limitato a 250 messaggi; geometria della finestra persistente. **X**, **Ctrl+Q**, SIGTERM e Ctrl+C dal terminale chiudono l'applicazione in modo ordinato; nessuna tray.
 
 ## Architettura
 
@@ -43,7 +43,7 @@ Il dataset resta nei modelli `QAbstractTableModel`/`QAbstractListModel`; QML ric
 
 `Theme.qml` centralizza superficie `#141414`, accento `#ff6600`, testo, font e raggi 28/22/16/12. `RaisedSurface` usa `RectangularShadow` con `cached: false`; `InsetSurface` compone bordi interni. Non ci sono shader personalizzati da compilare: quelli di Qt accompagnano la stessa versione PySide6. Le celle non hanno effetti individuali. La tabella e il log virtualizzano e riutilizzano i delegate.
 
-Le impostazioni e la cache mantengono i percorsi XDG precedenti. La geometria QWidget esistente viene importata una volta nel nuovo formato QML. Il frontend WebEngine è stato rimosso dopo un confronto su 81 combinazioni di sorgenti, filtri e fusi.
+Sorgenti, colonne ed etichette sono definite una sola volta in `config/constants.py`. Impostazioni (`~/.config/financial_calendar/settings.json`) e cache (`~/.local/share/financial_calendar/`) usano i percorsi XDG. Le chiavi `ig_*` e il file `calendar_ig.json` scritti quando ForexFactory usava la chiave storica `ig` vengono migrati automaticamente al primo avvio; gli UID ICS restano invariati. La geometria QWidget esistente viene importata una volta nel nuovo formato QML.
 
 ## Verifiche
 

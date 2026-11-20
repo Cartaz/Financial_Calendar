@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Correzioni
+- Ordinamento numerico corretto per Attuale, Previsione, Precedente e Dev (segno, decimali e suffissi K/M/B/T); valori vuoti in fondo.
+- Filtri e spostamenti di colonna inviati subito dopo un cambio di sorgente si applicano alla sorgente selezionata; i controlli non vengono più disabilitati a ogni aggiornamento.
+- Orario delle notifiche nel fuso scelto nelle impostazioni.
+- Finestra massimizzata: lo stato e la dimensione normale vengono salvati e ripristinati.
+- SIGTERM e Ctrl+C chiudono in modo ordinato, salvando la geometria.
+
+### Manutenzione
+- La sorgente ForexFactory usa la chiave `forexfactory` al posto della storica `ig`; impostazioni e cache esistenti sono migrate automaticamente.
+- Rimossi codice morto e un secondo meccanismo di riordino colonne non raggiungibile dall'utente; colonne, sorgenti ed etichette definite una sola volta.
+- Scrittura atomica condivisa, stato del controller indicizzato per sorgente, timestamp di refresh solo nella cache.
+- Test isolati da `tests/conftest.py`; dipendenze di sviluppo in `requirements-dev.txt`. Documentata la copertura settimanale di ForexFactory.
+- Audit QML spostato in `docs/AUDIT_QML.md`; analisi completa in `ANALISI.md`.
+
 ## [1.1.0] - 2026-09-30
 
 ### UI QML nativa

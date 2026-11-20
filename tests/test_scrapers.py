@@ -4,7 +4,7 @@ import requests
 import pytest
 
 from core.exceptions import ScraperConnectionError, ScraperParseError
-from core import scraper_fxstreet, scraper_ig
+from core import scraper_fxstreet, scraper_forexfactory
 
 
 class FakeResponse:
@@ -34,9 +34,9 @@ class StaticSession:
 
 
 def test_forexfactory_network_error_never_returns_demo_data(monkeypatch) -> None:
-    monkeypatch.setattr(scraper_ig, "_SESSION", FailingSession())
+    monkeypatch.setattr(scraper_forexfactory, "_SESSION", FailingSession())
     with pytest.raises(ScraperConnectionError):
-        scraper_ig.scrape_ig_calendar()
+        scraper_forexfactory.scrape_forexfactory_calendar()
 
 
 def test_fxstreet_network_error_never_returns_demo_data(monkeypatch) -> None:
@@ -47,7 +47,7 @@ def test_fxstreet_network_error_never_returns_demo_data(monkeypatch) -> None:
 
 def test_forexfactory_zero_valid_events_is_parse_error(monkeypatch) -> None:
     monkeypatch.setattr(
-        scraper_ig,
+        scraper_forexfactory,
         "_SESSION",
         StaticSession(
             [
@@ -60,7 +60,7 @@ def test_forexfactory_zero_valid_events_is_parse_error(monkeypatch) -> None:
         ),
     )
     with pytest.raises(ScraperParseError):
-        scraper_ig.scrape_ig_calendar()
+        scraper_forexfactory.scrape_forexfactory_calendar()
 
 
 def test_fxstreet_zero_valid_events_is_parse_error(monkeypatch) -> None:
@@ -91,13 +91,13 @@ def test_raw_payload_is_not_persisted_without_debug(monkeypatch) -> None:
             "impact": "High",
         }
     ]
-    monkeypatch.setattr(scraper_ig, "_SESSION", StaticSession(payload))
+    monkeypatch.setattr(scraper_forexfactory, "_SESSION", StaticSession(payload))
     calls = []
     monkeypatch.setattr(
-        scraper_ig,
+        scraper_forexfactory,
         "save_debug_json",
         lambda data, name: calls.append((data, name)),
     )
-    events = scraper_ig.scrape_ig_calendar(debug=False)
+    events = scraper_forexfactory.scrape_forexfactory_calendar(debug=False)
     assert events
     assert calls == []

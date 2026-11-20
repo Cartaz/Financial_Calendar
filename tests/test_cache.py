@@ -46,10 +46,12 @@ def test_cache_round_trip_preserves_real_event_data(
     assert "skipped=0" in caplog.text
 
     payload = json.loads(
-        (PathConfig.APP_DATA_DIR / "calendar_ig.json").read_text(encoding="utf-8")
+        (PathConfig.APP_DATA_DIR / "calendar_forexfactory.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert payload["version"] == 1
-    assert payload["source"] == "ig"
+    assert payload["source"] == "forexfactory"
     assert payload["events"][0]["event_name"] == "Cached test event"
 
 

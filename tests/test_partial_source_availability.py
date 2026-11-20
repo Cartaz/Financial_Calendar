@@ -32,7 +32,7 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
 
     monkeypatch.setattr(
         app_controller_module,
-        "scrape_ig_calendar",
+        "scrape_forexfactory_calendar",
         lambda debug=False, **kwargs: [_future_event()],
     )
 
@@ -73,7 +73,7 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
         refreshed = [
             payload
             for name, payload in notifications
-            if name == "calendar_refreshed" and payload.get("source") == "ig"
+            if name == "calendar_refreshed" and payload.get("source") == "forexfactory"
         ]
         failed = [
             payload
@@ -85,7 +85,7 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
         assert len(failed) == 1
         assert "FXStreet unavailable" in failed[0]["error"]
 
-        cache_path = PathConfig.APP_DATA_DIR / "calendar_ig.json"
+        cache_path = PathConfig.APP_DATA_DIR / "calendar_forexfactory.json"
         assert cache_path.exists()
         assert not (PathConfig.APP_DATA_DIR / "calendar_fxstreet.json").exists()
     finally:

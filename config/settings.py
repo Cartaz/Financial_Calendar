@@ -22,8 +22,8 @@ _SORT_KEYS = {source: {"", *columns} for source, columns in COLUMNS.items()}
 
 @dataclass(slots=True)
 class UserSettings:
-    ig_column_order: list[int] = field(
-        default_factory=lambda: list(range(len(COLUMNS["ig"])))
+    forexfactory_column_order: list[int] = field(
+        default_factory=lambda: list(range(len(COLUMNS["forexfactory"])))
     )
     fxstreet_column_order: list[int] = field(
         default_factory=lambda: list(range(len(COLUMNS["fxstreet"])))
@@ -32,20 +32,20 @@ class UserSettings:
         default_factory=lambda: list(range(len(COLUMNS["combined"])))
     )
 
-    ig_selected_region: str = "ALL"
-    ig_selected_impact: str = "ALL"
+    forexfactory_selected_region: str = "ALL"
+    forexfactory_selected_impact: str = "ALL"
     fxstreet_selected_region: str = "ALL"
     fxstreet_selected_impact: str = "ALL"
     combined_selected_region: str = "ALL"
     combined_selected_impact: str = "ALL"
 
-    active_source: str = "ig"
+    active_source: str = "forexfactory"
     timezone_name: str = "local"
     selected_date: str = ""
     auto_refresh_minutes: int = 15
     high_notification_minutes: int = 0
-    ig_sort_key: str = ""
-    ig_sort_direction: str = "asc"
+    forexfactory_sort_key: str = ""
+    forexfactory_sort_direction: str = "asc"
     fxstreet_sort_key: str = ""
     fxstreet_sort_direction: str = "asc"
     combined_sort_key: str = ""
@@ -54,6 +54,17 @@ class UserSettings:
 
 
 _SETTINGS_FIELDS = {item.name for item in fields(UserSettings)}
+
+
+def _migrate_legacy_keys(raw: dict) -> dict:
+    """Map ForexFactory's former "ig" key (an earlier provider) to "forexfactory"."""
+    migrated = dict(raw)
+    for key, value in raw.items():
+        if key.startswith("ig_"):
+            migrated.setdefault("forexfactory_" + key.removeprefix("ig_"), value)
+    if migrated.get("active_source") == "ig":
+        migrated["active_source"] = "forexfactory"
+    return migrated
 
 
 def _valid_column_order(value: object, count: int) -> list[int]:
@@ -113,7 +124,7 @@ def _normalize_setting(key: str, value: Any) -> Any:
 
     if key == "active_source":
         text = str(value)
-        return text if text in SOURCES else "ig"
+        return text if text in SOURCES else "forexfactory"
 
     if key == "timezone_name":
         return _normalize_timezone(value)
@@ -166,6 +177,7 @@ class Settings:
                     raw = json.load(handle)
                 if not isinstance(raw, dict):
                     raise TypeError("settings root must be an object")
+                raw = _migrate_legacy_keys(raw)
 
                 defaults = UserSettings()
                 normalized: dict[str, Any] = {}
@@ -183,11 +195,17 @@ class Settings:
                 legacy_region = raw.get("selected_region")
                 legacy_impact = raw.get("selected_impact")
                 if legacy_region is not None:
-                    for key in ("ig_selected_region", "fxstreet_selected_region"):
+                    for key in (
+                        "forexfactory_selected_region",
+                        "fxstreet_selected_region",
+                    ):
                         if key not in raw:
                             normalized[key] = _normalize_setting(key, legacy_region)
                 if legacy_impact is not None:
-                    for key in ("ig_selected_impact", "fxstreet_selected_impact"):
+                    for key in (
+                        "forexfactory_selected_impact",
+                        "fxstreet_selected_impact",
+                    ):
                         if key not in raw:
                             normalized[key] = _normalize_setting(key, legacy_impact)
 

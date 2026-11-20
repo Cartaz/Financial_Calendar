@@ -68,7 +68,7 @@ def test_combined_source_merges_and_annotates_real_events(
         view.change("impact", "HIGH")
         rows = view.change("timezone_name", "Europe/Rome").rows
         assert len(rows) == 2
-        assert {row["source"] for row in rows} == {"ig", "fxstreet"}
+        assert {row["source"] for row in rows} == {"forexfactory", "fxstreet"}
         assert {row["duplicate_group"] for row in rows} == {"D1"}
         view.change("sort", "source")
         initial = view.snapshot()

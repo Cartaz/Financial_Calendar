@@ -14,7 +14,7 @@ from config.timezones import resolve_timezone
 from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_fxstreet import scrape_fxstreet_calendar
-from core.scraper_ig import scrape_ig_calendar
+from core.scraper_forexfactory import scrape_forexfactory_calendar
 from core.time_utils import try_parse_utc
 
 logger = logging.getLogger(__name__)
@@ -120,7 +120,7 @@ class AppController:
 
     def _scrape(self, source: CalendarSource) -> list[CalendarEvent]:
         scraper = (
-            scrape_ig_calendar
+            scrape_forexfactory_calendar
             if source == CalendarSource.FOREXFACTORY
             else scrape_fxstreet_calendar
         )

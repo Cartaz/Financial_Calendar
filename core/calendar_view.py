@@ -186,7 +186,7 @@ class CalendarViewService:
         impact = self.settings.get(f"{active}_selected_impact")
         sources = tuple(
             CalendarSource(key)
-            for key in ("ig", "fxstreet")
+            for key in ("forexfactory", "fxstreet")
             if active == "combined" or key == active
         )
         events = self.queries.query(
