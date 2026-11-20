@@ -428,3 +428,42 @@ def test_commands_queued_after_a_source_switch_apply_to_the_new_source(app, back
     finally:
         adapter.stop()
         queue.shutdown()
+
+
+def test_maximized_window_keeps_its_normal_geometry(app, backend):
+    controller, settings = backend
+    window = CalendarWindow(controller, settings, autostart=False)
+    try:
+        window.show()
+        QTest.qWait(50)
+        window.root.setGeometry(40, 50, 820, 600)
+        QTest.qWait(50)
+        window.root.showMaximized()
+        spin(app, lambda: window.root.visibility().name == "Maximized")
+    finally:
+        window.root.close()
+        window.shutdown()
+        window.engine.deleteLater()
+        app.processEvents()
+    saved = json.loads(settings.get("window_geometry")[4:])
+    assert saved == {"x": 40, "y": 50, "width": 820, "height": 600, "maximized": True}
+
+    # A restored maximized window opens maximized and saves the same state
+    # again, instead of persisting the maximized size as its normal size.
+    restored = CalendarWindow(controller, settings, autostart=False)
+    try:
+        restored.show()
+        spin(app, lambda: restored.root.visibility().name == "Maximized")
+    finally:
+        restored.root.close()
+        restored.shutdown()
+        restored.engine.deleteLater()
+        app.processEvents()
+    again = json.loads(settings.get("window_geometry")[4:])
+    # x may be clamped onto the 800 px offscreen screen; size and state persist.
+    assert {key: again[key] for key in ("y", "width", "height", "maximized")} == {
+        "y": 50,
+        "width": 820,
+        "height": 600,
+        "maximized": True,
+    }

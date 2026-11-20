@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 from PySide6.QtCore import QObject, QUrl, QByteArray, QRect
-from PySide6.QtGui import QFont, QFontDatabase, QIcon
+from PySide6.QtGui import QFont, QFontDatabase, QIcon, QWindow
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication, QWidget
@@ -25,6 +25,10 @@ class CalendarWindow(QObject):
         super().__init__()
         self.controller, self.settings = controller, settings
         self._stopped = False
+        # Last two windowed geometries and maximized state, tracked while the
+        # window is visible: at shutdown it is already hidden.
+        self._normal_geometries: list[QRect] = []
+        self._maximized = False
         if QQuickStyle.name() != "Basic":
             QQuickStyle.setStyle("Basic")
         font = PathConfig.ASSETS_DIR / "fonts" / "NotoSans.ttf"
@@ -67,6 +71,14 @@ class CalendarWindow(QObject):
         self.root.setIcon(
             QIcon(str(PathConfig.ASSETS_DIR / "icons" / "financial-calendar.png"))
         )
+        for changed in (
+            self.root.xChanged,
+            self.root.yChanged,
+            self.root.widthChanged,
+            self.root.heightChanged,
+            self.root.visibilityChanged,
+        ):
+            changed.connect(self._track_geometry)
         self._restore_geometry()
         QApplication.instance().aboutToQuit.connect(self.stop)
         if autostart:
@@ -111,13 +123,50 @@ class CalendarWindow(QObject):
                 )
             )
             self.root.setGeometry(geometry)
-            if maximized:
-                self.root.showMaximized()
+            # The window is still hidden: seed the tracked state directly.
+            self._normal_geometries = [geometry]
+            self._maximized = maximized
         except (ValueError, TypeError, KeyError, OverflowError):
             logger.warning("Geometria salvata non valida", exc_info=True)
 
+    def _track_geometry(self, *_):
+        visibility = self.root.visibility()
+        geometry = self.root.geometry()
+        if visibility == QWindow.Visibility.Windowed:
+            self._maximized = False
+            if not self._normal_geometries or self._normal_geometries[-1] != geometry:
+                self._normal_geometries = [*self._normal_geometries[-1:], geometry]
+        elif visibility in (
+            QWindow.Visibility.Maximized,
+            QWindow.Visibility.FullScreen,
+        ):
+            if not self._maximized and len(self._normal_geometries) > 1:
+                # Some platforms report the maximized size before the state.
+                if self._normal_geometries[-1] == geometry:
+                    self._normal_geometries.pop()
+            self._maximized = True
+
+    def _saved_geometry(self):
+        if self._normal_geometries:
+            r = self._normal_geometries[-1]
+        else:
+            r = self.root.geometry()
+        return "qml:" + json.dumps(
+            dict(
+                x=r.x(),
+                y=r.y(),
+                width=r.width(),
+                height=r.height(),
+                maximized=self._maximized,
+            )
+        )
+
     def show(self):
-        self.root.show()
+        # QWindow.show() would drop a maximized state set before the first show.
+        if self._maximized:
+            self.root.showMaximized()
+        else:
+            self.root.show()
 
     def stop(self):
         if self._stopped:
@@ -128,16 +177,7 @@ class CalendarWindow(QObject):
         self.runtime.stop()
         self.exporter.stop()
         if hasattr(self, "root"):
-            r = self.root.geometry()
-            value = "qml:" + json.dumps(
-                dict(
-                    x=r.x(),
-                    y=r.y(),
-                    width=r.width(),
-                    height=r.height(),
-                    maximized=self.root.visibility().name == "Maximized",
-                )
-            )
+            value = self._saved_geometry()
 
             def save_geometry():
                 if not self.settings.set("window_geometry", value):
