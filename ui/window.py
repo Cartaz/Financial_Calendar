@@ -143,10 +143,9 @@ class CalendarWindow(QObject):
         if visibility == QWindow.Visibility.Windowed:
             self._pending_geometry = self.root.geometry()
             self._settle.start()
-        elif visibility in (
-            QWindow.Visibility.Maximized,
-            QWindow.Visibility.FullScreen,
-        ):
+        elif visibility == QWindow.Visibility.Maximized:
+            # Full screen is not persisted: the last windowed or maximized
+            # state is kept instead.
             self._settle.stop()
             self._pending_geometry = None
             self._maximized = True

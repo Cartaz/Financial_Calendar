@@ -47,21 +47,21 @@ def _natural(value: str):
 
 
 _NUMERIC_COLUMNS = frozenset({"actual", "forecast", "previous", "deviation"})
-# Sign, optional currency symbol, number with optional exponent, magnitude.
+# Sign, optional currency symbol, number with optional exponent, and an
+# uppercase magnitude that is not the start of a unit word (25bps, 3bcf).
 _NUMBER = re.compile(
-    r"([+-]?)\s*[$€£¥]?\s*((?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*([KMBT])?",
-    re.I,
+    r"([+-]?)\s*[$€£¥]?\s*((?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
+    r"\s*([KMBT](?![A-Za-z]))?"
 )
 _MAGNITUDE = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}
 
 
 def _numeric(value: str) -> float | None:
     """Return the signed magnitude of a value such as -0.5%, 9.5K, -$1.2B or 5e-05."""
-    match = _NUMBER.search(value.replace(",", ""))
+    match = _NUMBER.search(value.replace(",", "").replace("\u2212", "-"))
     if match is None:
         return None
-    number = float(match[1] + match[2])
-    return number * _MAGNITUDE.get((match[3] or "").upper(), 1.0)
+    return float(match[1] + match[2]) * _MAGNITUDE.get(match[3] or "", 1.0)
 
 
 def sort_rows(rows: list[dict], key: str, descending: bool) -> list[dict]:

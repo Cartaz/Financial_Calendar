@@ -55,3 +55,14 @@ def test_scientific_notation_and_currency_signs() -> None:
         "1.2",
         "$900M",
     ]
+
+
+def test_unit_words_are_not_magnitudes_and_unicode_minus_is_a_sign() -> None:
+    rows = _rows(["25bps", "1.2M", "\u22120.5%", "3Bcf", "0.1%"])
+    assert [row["actual"] for row in sort_rows(rows, "actual", False)] == [
+        "\u22120.5%",
+        "0.1%",
+        "3Bcf",
+        "25bps",
+        "1.2M",
+    ]
