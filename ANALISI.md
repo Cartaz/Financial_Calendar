@@ -229,6 +229,14 @@ Emersi durante il lavoro, corretti nella stessa PR:
 - Il flag `maximized` veniva letto a finestra già nascosta, quindi era sempre `false`.
 - Il ripristino di una finestra massimizzata veniva annullato da `show()`.
 
+Dalle tre review del diff, corretti con test o riproduzione:
+- Comandi delle intestazioni preparati su una vista non più attuale: ora vengono scartati.
+- Geometria registrata solo quando la finestra è stabile.
+- Ordinamento numerico che ora riconosce la notazione scientifica, il segno prima della valuta, le unità come `bps` e il meno Unicode.
+- Segnali: un secondo SIGTERM termina uno shutdown bloccato e gli handler ereditati vengono rispettati.
+
+Non correzione, solo segnalazione (preesistente): gli export CSV/ICS vengono creati con permessi `0600`.
+
 Non fatti, di proposito:
 - Installazione di `.desktop` e icona: scrive fuori dal repository.
 - Rinomina dei file di test per funzionalità: molto rumore nel diff, poco valore.
