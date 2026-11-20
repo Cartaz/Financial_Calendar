@@ -13,33 +13,65 @@ class AppMeta:
     ICON_NAME = "financial-calendar"
 
 
-class CalendarDefaults:
-    IG_COLUMNS = [
-        "Data",
-        "Ora",
-        "Paese",
-        "Importanza",
-        "Evento",
-        "Attuale",
-        "Previsione",
-        "Precedente",
-    ]
-    FXSTREET_COLUMNS = [
-        "Data",
-        "Ora",
-        "Paese",
-        "Evento",
-        "Impatto",
-        "Attuale",
-        "Dev",
-        "Consensus",
-        "Precedente",
-    ]
+# Source keys shown by the UI; "combined" merges both feeds.
+SOURCES = {"ig": "ForexFactory", "fxstreet": "FXStreet", "combined": "Tutti"}
 
+# Canonical column keys per source, in default display order.
+COLUMNS: dict[str, tuple[str, ...]] = {
+    "ig": (
+        "date",
+        "time",
+        "country",
+        "impact",
+        "event_name",
+        "actual",
+        "forecast",
+        "previous",
+    ),
+    "fxstreet": (
+        "date",
+        "time",
+        "country",
+        "event_name",
+        "impact",
+        "actual",
+        "deviation",
+        "forecast",
+        "previous",
+    ),
+    "combined": (
+        "date",
+        "time",
+        "country",
+        "impact",
+        "event_name",
+        "source",
+        "actual",
+        "forecast",
+        "previous",
+        "deviation",
+    ),
+}
+
+COLUMN_LABELS = {
+    "date": "Data",
+    "time": "Ora",
+    "country": "Paese",
+    "impact": "Impatto",
+    "event_name": "Evento",
+    "source": "Sorgente",
+    "actual": "Attuale",
+    "forecast": "Previsione",
+    "previous": "Precedente",
+    "deviation": "Dev",
+}
+
+
+class CalendarDefaults:
     # requests supports a (connect_timeout, read_timeout) tuple.
     HTTP_TIMEOUT = (5, 15)
 
-    REGIONS = ["EUR", "USA", "JPN", "GBP", "CHF", "CAD", "AUD", "NZD", "CNY", "ALL"]
+    REGIONS = ["ALL", "EUR", "USA", "JPN", "GBP", "CHF", "CAD", "AUD", "NZD", "CNY"]
     IMPACT_LEVELS = ["HIGH", "MID", "LOW"]
     PAST_EVENT_CUTOFF_HOURS = 24
 

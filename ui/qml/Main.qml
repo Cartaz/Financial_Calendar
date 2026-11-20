@@ -59,7 +59,6 @@ ApplicationWindow {
                 height: 62
                 text: label + "  ·  " + (refreshing ? "Aggiornamento…" : freshness)
                 checked: root.calendar.state.active_source === key
-                enabled: !root.calendar.busy
                 onClicked: root.calendar.selectSource(key)
                 ToolTip.visible: hovered
                 ToolTip.text: status
@@ -71,16 +70,14 @@ ApplicationWindow {
             NeuComboBox {
                 objectName: "regionFilter"
                 Accessible.name: "Paese"
-                model: ["ALL", "EUR", "USA", "JPN", "GBP", "CHF", "CAD", "AUD", "NZD", "CNY"]
+                model: root.calendar.regions
                 currentIndex: Math.max(0, model.indexOf(root.calendar.state.region))
-                enabled: !root.calendar.busy
                 onActivated: root.calendar.setFilter("region", currentText)
             }
             NeuComboBox {
                 Accessible.name: "Impatto"
-                model: ["ALL", "HIGH", "MID", "LOW"]
+                model: root.calendar.impacts
                 currentIndex: Math.max(0, model.indexOf(root.calendar.state.impact))
-                enabled: !root.calendar.busy
                 onActivated: root.calendar.setFilter("impact", currentText)
             }
             NeuComboBox {
@@ -90,7 +87,6 @@ ApplicationWindow {
                 model: ["Tutte le date", "Oggi", "Domani", "Prossime 24 h", "Data specifica"]
                 implicitWidth: 156
                 currentIndex: Math.max(0, values.indexOf(root.calendar.state.quick_range))
-                enabled: !root.calendar.busy
                 onActivated: { if (currentIndex === 4) settingsPopup.open(); else root.calendar.setFilter("range", values[currentIndex]) }
             }
             NeuTextField {
@@ -131,7 +127,6 @@ ApplicationWindow {
                     required property int column
                     property int dropColumn: -1
                     text: String(model.display)
-                    enabled: !root.calendar.busy
                     onClicked: root.calendar.sortColumn(column)
                     Keys.onLeftPressed: event => { if (event.modifiers & Qt.AltModifier) root.calendar.moveColumn(column, column - 1); else event.accepted = false }
                     Keys.onRightPressed: event => { if (event.modifiers & Qt.AltModifier) root.calendar.moveColumn(column, column + 1); else event.accepted = false }
@@ -140,7 +135,6 @@ ApplicationWindow {
                     DragHandler {
                         id: headerDrag
                         target: null
-                        enabled: !root.calendar.busy
                         acceptedButtons: Qt.LeftButton
                         yAxis.enabled: false
                         onCentroidChanged: {
@@ -172,28 +166,6 @@ ApplicationWindow {
                 clip: true
                 reuseItems: true
                 activeFocusOnTab: true
-                property bool resettingOrder: false
-                onColumnMoved: { if (!resettingOrder) orderDelay.restart() }
-                Timer {
-                    id: orderDelay
-                    interval: 0
-                    onTriggered: {
-                        let positions = []
-                        for (let i = 0; i < header.columns; ++i)
-                            positions.push(header.modelIndex(Qt.point(i, 0)).column)
-                        root.calendar.setColumnPositions(positions)
-                    }
-                }
-                Connections {
-                    target: root.calendar
-                    function onAccepted() {
-                        orderDelay.stop()
-                        table.resettingOrder = true
-                        table.clearColumnReordering()
-                        table.resettingOrder = false
-                        table.forceLayout()
-                    }
-                }
                 model: root.calendar.tableModel
                 selectionModel: ItemSelectionModel { model: table.model }
                 selectionBehavior: TableView.SelectRows

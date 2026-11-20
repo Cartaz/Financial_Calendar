@@ -1,8 +1,12 @@
 """Focused typed QML commands and read-only presentation state."""
 
 from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer
+from config.constants import CalendarDefaults
 from core.calendar_view import CalendarViewService
 from ui.models import CalendarTableModel, RecordListModel
+
+REGIONS = list(CalendarDefaults.REGIONS)
+IMPACTS = ["ALL", *CalendarDefaults.IMPACT_LEVELS]
 
 
 class CalendarAdapter(QObject):
@@ -31,6 +35,8 @@ class CalendarAdapter(QObject):
         self.reload()
 
     tableModel = Property(QObject, lambda self: self.table, constant=True)
+    regions = Property("QVariantList", lambda self: REGIONS, constant=True)
+    impacts = Property("QVariantList", lambda self: IMPACTS, constant=True)
     sourceModel = Property(QObject, lambda self: self.sources, constant=True)
     state = Property(
         "QVariantMap",
@@ -93,10 +99,7 @@ class CalendarAdapter(QObject):
         self.change(key, value)
 
     def change(self, key, value):
-        source = self._view.state["active_source"] if self._view else "ig"
-        self.queue.submit(
-            lambda: self.service.change(key, value, source=source), self._received
-        )
+        self.queue.submit(lambda: self.service.change(key, value), self._received)
 
     @Slot(int)
     def sortColumn(self, column):
@@ -105,16 +108,12 @@ class CalendarAdapter(QObject):
 
     @Slot(int, int)
     def moveColumn(self, old, new):
-        source = self._view.state["active_source"] if self._view else "ig"
+        columns = self.table.columns
+        if old == new or not (0 <= old < len(columns) and 0 <= new < len(columns)):
+            return
+        column, target = columns[old], columns[new]
         self.queue.submit(
-            lambda: self.service.move_column(source, old, new), self._received
-        )
-
-    @Slot("QVariantList")
-    def setColumnPositions(self, positions):
-        source = self._view.state["active_source"] if self._view else "ig"
-        self.queue.submit(
-            lambda: self.service.set_column_positions(source, positions), self._received
+            lambda: self.service.move_column(column, target), self._received
         )
 
     @Slot(str)

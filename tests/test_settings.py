@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from config.constants import CalendarDefaults, PathConfig
+from config.constants import COLUMNS, PathConfig
 from config.settings import Settings
 
 
@@ -61,9 +61,7 @@ def test_invalid_schema_falls_back_to_safe_defaults(monkeypatch, tmp_path) -> No
     settings = Settings()
     settings.load()
 
-    assert settings.get("ig_column_order") == list(
-        range(len(CalendarDefaults.IG_COLUMNS))
-    )
+    assert settings.get("ig_column_order") == list(range(len(COLUMNS["ig"])))
     assert settings.get("fxstreet_selected_region") == "ALL"
     assert settings.get("auto_refresh_minutes") == 15
     assert settings.get("selected_date") == ""

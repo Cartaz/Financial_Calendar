@@ -7,67 +7,12 @@ from datetime import datetime, timedelta, timezone
 import math
 import re
 
-from config.constants import CalendarDefaults
+from config.constants import COLUMNS, SOURCES, CalendarDefaults
 from config.timezones import resolve_timezone
 from core.calendar_queries import CalendarQueryService
 from core.event_matching import build_duplicate_groups, event_identity
 from core.models import CalendarSource
 from core.time_utils import try_parse_utc
-
-SOURCES = {"ig": "ForexFactory", "fxstreet": "FXStreet", "combined": "Tutti"}
-COLUMNS = {
-    "ig": (
-        "date",
-        "time",
-        "country",
-        "impact",
-        "event_name",
-        "actual",
-        "forecast",
-        "previous",
-    ),
-    "fxstreet": (
-        "date",
-        "time",
-        "country",
-        "event_name",
-        "impact",
-        "actual",
-        "deviation",
-        "forecast",
-        "previous",
-    ),
-    "combined": (
-        "date",
-        "time",
-        "country",
-        "impact",
-        "event_name",
-        "source",
-        "actual",
-        "forecast",
-        "previous",
-        "deviation",
-    ),
-}
-LABELS = dict(
-    zip(
-        COLUMNS["combined"],
-        (
-            "Data",
-            "Ora",
-            "Paese",
-            "Impatto",
-            "Evento",
-            "Sorgente",
-            "Attuale",
-            "Previsione",
-            "Precedente",
-            "Dev",
-        ),
-        strict=True,
-    )
-)
 
 
 @dataclass(frozen=True)
@@ -150,83 +95,81 @@ class CalendarViewService:
         self._matching_events = None
         self._matching_groups = {}
 
-    def change(self, key: str, value, *, source: str = "") -> CalendarView:
+    def change(self, key: str, value) -> CalendarView:
+        """Apply one preference change to the source active when the command runs.
+
+        Commands are serialized by the UI worker, so reading the active source
+        here (not when the command was queued) keeps per-source preferences on
+        the source the user selected last.
+        """
+        source = self.settings.get("active_source")
         if key == "search":
             self.search = str(value)[:1000]
-        elif key == "range":
+            return self.snapshot()
+        if key == "range":
             if value not in {"all", "today", "tomorrow", "next24"}:
                 raise ValueError("Intervallo non valido")
             if not self.settings.set("selected_date", ""):
                 raise OSError("Impossibile salvare la data")
             self.quick_range = value
+            return self.snapshot()
+
+        if key == "sort":
+            if value not in COLUMNS[source]:
+                raise ValueError("Colonna non valida")
+            direction = (
+                "desc"
+                if self.settings.get(f"{source}_sort_key") == value
+                and self.settings.get(f"{source}_sort_direction") == "asc"
+                else "asc"
+            )
+            values = {
+                f"{source}_sort_key": value,
+                f"{source}_sort_direction": direction,
+            }
+        elif key == "region":
+            if value not in CalendarDefaults.REGIONS:
+                raise ValueError("Area non valida")
+            values = {f"{source}_selected_region": value}
+        elif key == "impact":
+            if value not in {"ALL", *CalendarDefaults.IMPACT_LEVELS}:
+                raise ValueError("Impatto non valido")
+            values = {f"{source}_selected_impact": value}
+        elif key == "column_order":
+            values = {f"{source}_column_order": value}
+        elif key in {
+            "active_source",
+            "timezone_name",
+            "selected_date",
+            "auto_refresh_minutes",
+            "high_notification_minutes",
+        }:
+            if key == "active_source" and value not in SOURCES:
+                raise ValueError("Sorgente non valida")
+            values = {key: value}
         else:
-            if key in {"region", "impact", "column_order", "sort"}:
-                if source not in SOURCES:
-                    raise ValueError("Sorgente non valida")
-                if key == "sort":
-                    if value not in COLUMNS[source]:
-                        raise ValueError("Colonna non valida")
-                    direction = (
-                        "desc"
-                        if self.settings.get(f"{source}_sort_key") == value
-                        and self.settings.get(f"{source}_sort_direction") == "asc"
-                        else "asc"
-                    )
-                    values = {
-                        f"{source}_sort_key": value,
-                        f"{source}_sort_direction": direction,
-                    }
-                else:
-                    suffix = {
-                        "region": "selected_region",
-                        "impact": "selected_impact",
-                        "column_order": "column_order",
-                    }[key]
-                    if key == "region" and value not in CalendarDefaults.REGIONS:
-                        raise ValueError("Area non valida")
-                    if key == "impact" and value not in {
-                        "ALL",
-                        *CalendarDefaults.IMPACT_LEVELS,
-                    }:
-                        raise ValueError("Impatto non valido")
-                    values = {f"{source}_{suffix}": value}
-            elif key in {
-                "active_source",
-                "timezone_name",
-                "selected_date",
-                "auto_refresh_minutes",
-                "high_notification_minutes",
-                "window_geometry",
-            }:
-                if key == "active_source" and value not in SOURCES:
-                    raise ValueError("Sorgente non valida")
-                values = {key: value}
-            else:
-                raise ValueError("Preferenza non valida")
-            if not self.settings.set_many(values):
-                raise OSError(
-                    "Impossibile salvare la modifica; valore precedente conservato"
-                )
-            if key == "selected_date":
-                self.quick_range = "manual" if value else "all"
+            raise ValueError("Preferenza non valida")
+        if not self.settings.set_many(values):
+            raise OSError(
+                "Impossibile salvare la modifica; valore precedente conservato"
+            )
+        if key == "selected_date":
+            self.quick_range = "manual" if value else "all"
         return self.snapshot()
 
-    def set_column_positions(self, source: str, positions: list[int]) -> CalendarView:
-        order = self.settings.get(f"{source}_column_order")
-        if any(type(i) is not int for i in positions) or sorted(positions) != list(
-            range(len(order))
-        ):
-            raise ValueError("Ordine colonne non valido")
-        return self.change("column_order", [order[i] for i in positions], source=source)
+    def move_column(self, column: str, target: str) -> CalendarView:
+        """Move ``column`` to the position currently held by ``target``.
 
-    def move_column(self, source: str, old: int, new: int) -> CalendarView:
-        if source not in SOURCES:
-            raise ValueError("Sorgente non valida")
+        Columns are named by key rather than index so a command queued against
+        an older view cannot move the wrong column.
+        """
+        source = self.settings.get("active_source")
         order = self.settings.get(f"{source}_column_order")
-        if not 0 <= old < len(order) or not 0 <= new < len(order):
-            raise ValueError("Posizione colonna non valida")
-        order.insert(new, order.pop(old))
-        return self.change("column_order", order, source=source)
+        keys = [COLUMNS[source][index] for index in order]
+        if column not in keys or target not in keys:
+            raise ValueError("Colonna non valida")
+        order.insert(keys.index(target), order.pop(keys.index(column)))
+        return self.change("column_order", order)
 
     def snapshot(self, *, now: datetime | None = None) -> CalendarView:
         now = now or datetime.now(timezone.utc)

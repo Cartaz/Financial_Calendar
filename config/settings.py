@@ -12,60 +12,27 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from config.constants import CalendarDefaults, PathConfig
+from config.constants import COLUMNS, SOURCES, CalendarDefaults, PathConfig
 from config.timezones import validate_timezone
 
 logger = logging.getLogger(__name__)
 
 _AUTO_REFRESH_MINUTES = {0, 5, 15, 30, 60}
 _NOTIFICATION_LEAD_MINUTES = {0, 5, 15, 30, 60}
-_IG_SORT_KEYS = {
-    "",
-    "date",
-    "time",
-    "country",
-    "impact",
-    "event_name",
-    "actual",
-    "forecast",
-    "previous",
-}
-_FXSTREET_SORT_KEYS = {
-    "",
-    "date",
-    "time",
-    "country",
-    "event_name",
-    "impact",
-    "actual",
-    "deviation",
-    "forecast",
-    "previous",
-}
-_COMBINED_SORT_KEYS = {
-    "",
-    "date",
-    "time",
-    "country",
-    "impact",
-    "event_name",
-    "source",
-    "actual",
-    "forecast",
-    "previous",
-    "deviation",
-}
+_SORT_KEYS = {source: {"", *columns} for source, columns in COLUMNS.items()}
 
 
 @dataclass(slots=True)
 class UserSettings:
     ig_column_order: list[int] = field(
-        default_factory=lambda: list(range(len(CalendarDefaults.IG_COLUMNS)))
+        default_factory=lambda: list(range(len(COLUMNS["ig"])))
     )
     fxstreet_column_order: list[int] = field(
-        default_factory=lambda: list(range(len(CalendarDefaults.FXSTREET_COLUMNS)))
+        default_factory=lambda: list(range(len(COLUMNS["fxstreet"])))
     )
-    combined_column_order: list[int] = field(default_factory=lambda: list(range(10)))
+    combined_column_order: list[int] = field(
+        default_factory=lambda: list(range(len(COLUMNS["combined"])))
+    )
 
     ig_selected_region: str = "ALL"
     ig_selected_impact: str = "ALL"
@@ -134,12 +101,10 @@ def _normalize_minutes(value: object, allowed: set[int], label: str) -> int:
 
 
 def _normalize_setting(key: str, value: Any) -> Any:
-    if key == "ig_column_order":
-        return _valid_column_order(value, len(CalendarDefaults.IG_COLUMNS))
-    if key == "fxstreet_column_order":
-        return _valid_column_order(value, len(CalendarDefaults.FXSTREET_COLUMNS))
-    if key == "combined_column_order":
-        return _valid_column_order(value, 10)
+    if key.endswith("_column_order"):
+        return _valid_column_order(
+            value, len(COLUMNS[key.removesuffix("_column_order")])
+        )
 
     if key.endswith("_selected_region"):
         text = str(value)
@@ -156,7 +121,7 @@ def _normalize_setting(key: str, value: Any) -> Any:
 
     if key == "active_source":
         text = str(value)
-        return text if text in {"ig", "fxstreet", "combined"} else "ig"
+        return text if text in SOURCES else "ig"
 
     if key == "timezone_name":
         return _normalize_timezone(value)
@@ -172,23 +137,11 @@ def _normalize_setting(key: str, value: Any) -> Any:
             value, _NOTIFICATION_LEAD_MINUTES, "notification lead"
         )
 
-    if key == "ig_sort_key":
+    if key.endswith("_sort_key"):
         text = str(value)
-        return text if text in _IG_SORT_KEYS else ""
+        return text if text in _SORT_KEYS[key.removesuffix("_sort_key")] else ""
 
-    if key == "fxstreet_sort_key":
-        text = str(value)
-        return text if text in _FXSTREET_SORT_KEYS else ""
-
-    if key == "combined_sort_key":
-        text = str(value)
-        return text if text in _COMBINED_SORT_KEYS else ""
-
-    if key in {
-        "ig_sort_direction",
-        "fxstreet_sort_direction",
-        "combined_sort_direction",
-    }:
+    if key.endswith("_sort_direction"):
         text = str(value)
         return text if text in {"asc", "desc"} else "asc"
 

@@ -9,7 +9,6 @@ import pytest
 from PySide6.QtCore import (
     QObject,
     QMetaObject,
-    Q_ARG,
     qInstallMessageHandler,
     QtMsgType,
 )
@@ -85,12 +84,12 @@ def test_view_source_filters_timezone_order_and_duplicates(backend):
     service = CalendarViewService(controller, settings)
     assert len(service.snapshot().rows) == 100
     assert service.change("active_source", "combined").columns == COLUMNS["combined"]
-    view = service.change("region", "USA", source="combined")
+    view = service.change("region", "USA")
     assert len(view.rows) == 100
     assert {row["duplicate_group"] for row in view.rows} == {
         f"D{i}" for i in range(1, 51)
     }
-    view = service.change("impact", "HIGH", source="combined")
+    view = service.change("impact", "HIGH")
     assert len(view.rows) == 34
     view = service.change("search", "Event 0")
     assert len(view.rows) == 2
@@ -98,13 +97,13 @@ def test_view_source_filters_timezone_order_and_duplicates(backend):
     after = service.change("timezone_name", "UTC+02:00").rows[0]
     assert after["utc_dt"] == before["utc_dt"]
     assert after["time"] != before["time"]
-    view = service.move_column("combined", 4, 0)
+    view = service.move_column("event_name", "date")
     assert view.columns[0] == "event_name"
     loaded = Settings()
     loaded.load()
     assert loaded.get("combined_column_order")[0] == 4
     with pytest.raises(ValueError):
-        service.move_column("combined", -1, 0)
+        service.move_column("missing", "date")
 
 
 def test_relative_ranges_and_natural_sort(backend):
@@ -123,11 +122,11 @@ def test_relative_ranges_and_natural_sort(backend):
         for row in view.rows
     )
     service.change("range", "all")
-    view = service.change("sort", "event_name", source="ig")
+    view = service.change("sort", "event_name")
     assert [row["event_name"] for row in view.rows[:12]] == [
         f"Event {i}" for i in range(12)
     ]
-    view = service.change("sort", "event_name", source="ig")
+    view = service.change("sort", "event_name")
     assert view.rows[0]["event_name"] == "Event 99"
     assert sum(row["next_high"] for row in view.rows) == 1
     assert countdown(300) == "tra 5 min"
@@ -179,9 +178,7 @@ def test_qml_models_interaction_export_and_geometry(app, backend, tmp_path):
         spin(app, lambda: window.calendar.count == 2 and not window.calendar.busy)
         assert window.calendar.table.columnCount() == 10
         assert all(row["duplicate_group"] for row in window.calendar.table.rows)
-        assert QMetaObject.invokeMethod(
-            table, "moveColumn", Q_ARG(int, 4), Q_ARG(int, 0)
-        )
+        window.calendar.moveColumn(4, 0)
         spin(
             app,
             lambda: (
@@ -404,3 +401,30 @@ def test_standalone_runtime_always_delivers_off_gui_thread(app, backend):
         release.set()
         runtime.shutdown()
     assert runtime._queue.closed
+
+
+def test_commands_queued_after_a_source_switch_apply_to_the_new_source(app, backend):
+    from ui.adapters import CalendarAdapter
+    from ui.workers import WorkQueue
+
+    controller, settings = backend
+    queue = WorkQueue()
+    adapter = CalendarAdapter(controller, settings, queue)
+    try:
+        spin(app, lambda: not queue.pending)
+        assert adapter.state["active_source"] == "ig"
+        # Both commands are queued before the first snapshot comes back.
+        adapter.selectSource("fxstreet")
+        adapter.setFilter("region", "USA")
+        adapter.moveColumn(3, 0)
+        spin(app, lambda: not queue.pending)
+        assert adapter.state["active_source"] == "fxstreet"
+        assert adapter.state["region"] == "USA"
+        assert settings.get("fxstreet_selected_region") == "USA"
+        assert settings.get("ig_selected_region") == "ALL"
+        # Index 3 of the ForexFactory header shown when queued is "impact".
+        assert adapter.table.columns[0] == "impact"
+        assert settings.get("ig_column_order") == list(range(8))
+    finally:
+        adapter.stop()
+        queue.shutdown()
