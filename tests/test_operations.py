@@ -134,3 +134,34 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(
     finally:
         runtime.shutdown()
         controller.shutdown()
+
+
+def test_notification_time_uses_the_configured_timezone(monkeypatch, tmp_path) -> None:
+    _redirect_paths(monkeypatch, tmp_path)
+    app = QApplication.instance() or QApplication([])
+    event = _event(CalendarSource.FXSTREET, "CPI")
+    _seed(CalendarSource.FXSTREET, [event])
+    settings = Settings()
+    assert settings.set_many(
+        {"timezone_name": "UTC+05:30", "high_notification_minutes": 5}
+    )
+    controller = AppController(settings)
+    controller.refresh_all = lambda: None
+    notifier = FakeNotifier()
+    runtime = CalendarRuntime(controller, settings, notifier=notifier)
+    try:
+        runtime.start()
+        deadline = time.monotonic() + 2
+        while runtime._checking and time.monotonic() < deadline:
+            app.processEvents()
+            QTest.qWait(5)
+        expected = (
+            datetime.fromisoformat(event.utc_dt)
+            .astimezone(timezone(timedelta(hours=5, minutes=30)))
+            .strftime("%H:%M")
+        )
+        assert len(notifier.messages) == 1
+        assert notifier.messages[0][1].endswith(expected)
+    finally:
+        runtime.shutdown()
+        controller.shutdown()

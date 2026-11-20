@@ -17,6 +17,7 @@ L'installer crea o ripara `.venv`, ripristina pip quando manca, installa `requir
 ## Funzioni
 
 - Sorgenti separate e vista **Tutti**, con indicazione dei probabili duplicati senza eliminare eventi.
+- Copertura diversa per sorgente: ForexFactory pubblica solo la **settimana corrente** (domenica–sabato; non esiste un feed pubblico della settimana successiva), FXStreet i **prossimi 7 giorni**. Da venerdì sera a domenica la vista **Tutti** mostra quindi gli eventi futuri della sola FXStreet.
 - Filtri per paese, impatto e data; ricerca; Oggi, Domani e Prossime 24 ore. I fusi `local`, `UTC`, IANA (es. `Europe/Rome`) e offset (es. `UTC+02:00`) sono risolti in Python, anche attraverso cambi DST.
 - Ordinamento cliccando le intestazioni; trascinamento delle colonne oppure **Alt+← / Alt+→** sull'intestazione selezionata. Filtri, ordinamento e colonne sono salvati per sorgente.
 - Refresh indipendente, freschezza per sorgente, cache persistente, avvio offline e dati precedenti conservati in caso di errore. La vista combinata segnala la disponibilità parziale.

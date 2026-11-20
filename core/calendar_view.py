@@ -101,6 +101,40 @@ def _natural(value: str):
     )
 
 
+_NUMERIC_COLUMNS = frozenset({"actual", "forecast", "previous", "deviation"})
+_NUMBER = re.compile(r"([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*([KMBT])?", re.I)
+_MAGNITUDE = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}
+
+
+def _numeric(value: str) -> float | None:
+    """Return the signed magnitude of an economic value such as -0.5% or 9.5K."""
+    match = _NUMBER.search(value.replace(",", ""))
+    if match is None:
+        return None
+    return float(match[1]) * _MAGNITUDE.get((match[2] or "").upper(), 1.0)
+
+
+def sort_rows(rows: list[dict], key: str, descending: bool) -> list[dict]:
+    """Sort view rows by column; non-numeric economic values always go last."""
+    if key == "impact":
+        rank = {"HIGH": 3, "MID": 2, "LOW": 1}
+        return sorted(rows, key=lambda row: rank[row["impact"]], reverse=descending)
+    if key == "date":
+        return sorted(
+            rows,
+            key=lambda row: tuple(reversed(row["date"].split("/"))),
+            reverse=descending,
+        )
+    if key in _NUMERIC_COLUMNS:
+        values = [(_numeric(str(row[key])), row) for row in rows]
+        numbers = [item for item in values if item[0] is not None]
+        numbers.sort(key=lambda item: item[0], reverse=descending)
+        return [row for _, row in numbers] + [
+            row for value, row in values if value is None
+        ]
+    return sorted(rows, key=lambda row: _natural(str(row[key])), reverse=descending)
+
+
 class CalendarViewService:
     """Single owner of session query state; Settings owns persisted preferences.
 
@@ -285,15 +319,7 @@ class CalendarViewService:
         sort_key = self.settings.get(f"{active}_sort_key")
         direction = self.settings.get(f"{active}_sort_direction")
         if sort_key:
-
-            def key(row):
-                if sort_key == "impact":
-                    return {"HIGH": 3, "MID": 2, "LOW": 1}[row["impact"]]
-                if sort_key == "date":
-                    return tuple(reversed(row["date"].split("/")))
-                return _natural(str(row[sort_key]))
-
-            rows.sort(key=key, reverse=direction == "desc")
+            rows = sort_rows(rows, sort_key, direction == "desc")
         order = self.settings.get(f"{active}_column_order")
         state = {
             key: self.settings.get(key)
