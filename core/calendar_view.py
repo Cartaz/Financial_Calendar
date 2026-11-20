@@ -47,16 +47,21 @@ def _natural(value: str):
 
 
 _NUMERIC_COLUMNS = frozenset({"actual", "forecast", "previous", "deviation"})
-_NUMBER = re.compile(r"([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*([KMBT])?", re.I)
+# Sign, optional currency symbol, number with optional exponent, magnitude.
+_NUMBER = re.compile(
+    r"([+-]?)\s*[$€£¥]?\s*((?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*([KMBT])?",
+    re.I,
+)
 _MAGNITUDE = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}
 
 
 def _numeric(value: str) -> float | None:
-    """Return the signed magnitude of an economic value such as -0.5% or 9.5K."""
+    """Return the signed magnitude of a value such as -0.5%, 9.5K, -$1.2B or 5e-05."""
     match = _NUMBER.search(value.replace(",", ""))
     if match is None:
         return None
-    return float(match[1]) * _MAGNITUDE.get((match[2] or "").upper(), 1.0)
+    number = float(match[1] + match[2])
+    return number * _MAGNITUDE.get((match[3] or "").upper(), 1.0)
 
 
 def sort_rows(rows: list[dict], key: str, descending: bool) -> list[dict]:
@@ -157,18 +162,36 @@ class CalendarViewService:
             self.quick_range = "manual" if value else "all"
         return self.snapshot()
 
-    def move_column(self, column: str, target: str) -> CalendarView:
-        """Move ``column`` to the position currently held by ``target``.
-
-        Columns are named by key rather than index so a command queued against
-        an older view cannot move the wrong column.
-        """
+    def _visible_columns(self) -> tuple[str, ...]:
         source = self.settings.get("active_source")
         order = self.settings.get(f"{source}_column_order")
-        keys = [COLUMNS[source][index] for index in order]
-        if column not in keys or target not in keys:
+        return tuple(COLUMNS[source][index] for index in order)
+
+    def sort_column(self, index: int, shown: tuple[str, ...]) -> CalendarView:
+        """Sort by the header the user clicked in the view ``shown``.
+
+        A click queued against a view that has since changed (another source,
+        another column order) is dropped instead of sorting a different column.
+        """
+        if self._visible_columns() != tuple(shown):
+            return self.snapshot()
+        if not 0 <= index < len(shown):
             raise ValueError("Colonna non valida")
-        order.insert(keys.index(target), order.pop(keys.index(column)))
+        return self.change("sort", shown[index])
+
+    def move_column(self, old: int, new: int, shown: tuple[str, ...]) -> CalendarView:
+        """Move a header from ``old`` to ``new`` in the view ``shown``.
+
+        Repeated Alt+arrow presses or a source switch can queue several moves
+        computed from the same view; only the first still matches and runs.
+        """
+        if self._visible_columns() != tuple(shown):
+            return self.snapshot()
+        source = self.settings.get("active_source")
+        order = self.settings.get(f"{source}_column_order")
+        if not (0 <= old < len(order) and 0 <= new < len(order)):
+            raise ValueError("Posizione colonna non valida")
+        order.insert(new, order.pop(old))
         return self.change("column_order", order)
 
     def snapshot(self, *, now: datetime | None = None) -> CalendarView:

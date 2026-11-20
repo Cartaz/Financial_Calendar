@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from PySide6.QtCore import QObject, QUrl, QByteArray, QRect
+from PySide6.QtCore import QObject, QUrl, QByteArray, QRect, QTimer
 from PySide6.QtGui import QFont, QFontDatabase, QIcon, QWindow
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -25,10 +25,17 @@ class CalendarWindow(QObject):
         super().__init__()
         self.controller, self.settings = controller, settings
         self._stopped = False
-        # Last two windowed geometries and maximized state, tracked while the
-        # window is visible: at shutdown it is already hidden.
-        self._normal_geometries: list[QRect] = []
+        # Normal geometry and maximized state are tracked while the window is
+        # visible, because at shutdown it is already hidden. A windowed geometry
+        # only counts once it has been stable for a moment, so intermediate
+        # frames of a maximize animation are never taken as the normal size.
+        self._normal_geometry: QRect | None = None
+        self._pending_geometry: QRect | None = None
         self._maximized = False
+        self._settle = QTimer(self)
+        self._settle.setSingleShot(True)
+        self._settle.setInterval(250)
+        self._settle.timeout.connect(self._settle_geometry)
         if QQuickStyle.name() != "Basic":
             QQuickStyle.setStyle("Basic")
         font = PathConfig.ASSETS_DIR / "fonts" / "NotoSans.ttf"
@@ -124,32 +131,40 @@ class CalendarWindow(QObject):
             )
             self.root.setGeometry(geometry)
             # The window is still hidden: seed the tracked state directly.
-            self._normal_geometries = [geometry]
+            self._normal_geometry = QRect(geometry)
             self._maximized = maximized
         except (ValueError, TypeError, KeyError, OverflowError):
             logger.warning("Geometria salvata non valida", exc_info=True)
 
     def _track_geometry(self, *_):
         visibility = self.root.visibility()
-        geometry = self.root.geometry()
         if visibility == QWindow.Visibility.Windowed:
-            self._maximized = False
-            if not self._normal_geometries or self._normal_geometries[-1] != geometry:
-                self._normal_geometries = [*self._normal_geometries[-1:], geometry]
+            self._pending_geometry = self.root.geometry()
+            self._settle.start()
         elif visibility in (
             QWindow.Visibility.Maximized,
             QWindow.Visibility.FullScreen,
         ):
-            if not self._maximized and len(self._normal_geometries) > 1:
-                # Some platforms report the maximized size before the state.
-                if self._normal_geometries[-1] == geometry:
-                    self._normal_geometries.pop()
+            self._settle.stop()
+            self._pending_geometry = None
             self._maximized = True
 
+    def _settle_geometry(self):
+        if (
+            self._pending_geometry is not None
+            and self.root.visibility() == QWindow.Visibility.Windowed
+        ):
+            self._normal_geometry = self._pending_geometry
+            self._pending_geometry = None
+            self._maximized = False
+
     def _saved_geometry(self):
-        if self._normal_geometries:
-            r = self._normal_geometries[-1]
-        else:
+        maximized = self._maximized
+        r = self._normal_geometry
+        if self._pending_geometry is not None:
+            # Windowed change still settling when the window closed.
+            r, maximized = self._pending_geometry, False
+        if r is None:
             r = self.root.geometry()
         return "qml:" + json.dumps(
             dict(
@@ -157,7 +172,7 @@ class CalendarWindow(QObject):
                 y=r.y(),
                 width=r.width(),
                 height=r.height(),
-                maximized=self._maximized,
+                maximized=maximized,
             )
         )
 
@@ -176,6 +191,7 @@ class CalendarWindow(QObject):
         self.calendar.stop()
         self.runtime.stop()
         self.exporter.stop()
+        self._settle.stop()
         if hasattr(self, "root"):
             value = self._saved_geometry()
 

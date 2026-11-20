@@ -45,6 +45,9 @@ def _quit_on_termination_signals(app: QApplication) -> None:
             return
         if received:
             logging.getLogger(__name__).info("Segnale di chiusura ricevuto")
+            # A second signal must still terminate, e.g. if shutdown hangs.
+            for signum in (signal.SIGTERM, signal.SIGINT):
+                signal.signal(signum, signal.SIG_DFL)
             app.quit()
 
     notifier.activated.connect(on_signal)

@@ -44,3 +44,14 @@ def test_text_columns_keep_natural_order() -> None:
         "Event 2",
         "Event 10",
     ]
+
+
+def test_scientific_notation_and_currency_signs() -> None:
+    rows = _rows(["1.2", "5e-05", "-$1.2B", "$900M", "-1.5e-3"])
+    assert [row["actual"] for row in sort_rows(rows, "actual", False)] == [
+        "-$1.2B",
+        "-1.5e-3",
+        "5e-05",
+        "1.2",
+        "$900M",
+    ]

@@ -93,13 +93,13 @@ def test_view_source_filters_timezone_order_and_duplicates(backend):
     after = service.change("timezone_name", "UTC+02:00").rows[0]
     assert after["utc_dt"] == before["utc_dt"]
     assert after["time"] != before["time"]
-    view = service.move_column("event_name", "date")
+    view = service.move_column(4, 0, COLUMNS["combined"])
     assert view.columns[0] == "event_name"
     loaded = Settings()
     loaded.load()
     assert loaded.get("combined_column_order")[0] == 4
     with pytest.raises(ValueError):
-        service.move_column("missing", "date")
+        service.move_column(-1, 0, view.columns)
 
 
 def test_relative_ranges_and_natural_sort(backend):
@@ -412,15 +412,24 @@ def test_commands_queued_after_a_source_switch_apply_to_the_new_source(app, back
         # Both commands are queued before the first snapshot comes back.
         adapter.selectSource("fxstreet")
         adapter.setFilter("region", "USA")
+        # Header commands built from the ForexFactory view are now stale.
         adapter.moveColumn(3, 0)
+        adapter.sortColumn(4)
         spin(app, lambda: not queue.pending)
         assert adapter.state["active_source"] == "fxstreet"
         assert adapter.state["region"] == "USA"
         assert settings.get("fxstreet_selected_region") == "USA"
         assert settings.get("forexfactory_selected_region") == "ALL"
-        # Index 3 of the ForexFactory header shown when queued is "impact".
-        assert adapter.table.columns[0] == "impact"
+        assert adapter.table.columns == COLUMNS["fxstreet"]
         assert settings.get("forexfactory_column_order") == list(range(8))
+        assert settings.get("fxstreet_sort_key") == ""
+        assert settings.get("forexfactory_sort_key") == ""
+
+        # Two Alt+Right presses queued from the same view move the column once.
+        adapter.moveColumn(2, 3)
+        adapter.moveColumn(2, 3)
+        spin(app, lambda: not queue.pending)
+        assert adapter.table.columns[:4] == ("date", "time", "event_name", "country")
     finally:
         adapter.stop()
         queue.shutdown()
@@ -433,7 +442,13 @@ def test_maximized_window_keeps_its_normal_geometry(app, backend):
         window.show()
         QTest.qWait(50)
         window.root.setGeometry(40, 50, 820, 600)
-        QTest.qWait(50)
+        QTest.qWait(400)  # let the windowed geometry settle
+        # A window manager may move the window before reporting the maximized
+        # state; that intermediate frame must not become the normal geometry.
+        window.root.setGeometry(60, 70, 820, 600)
+        QTest.qWait(10)
+        assert window.root.visibility().name == "Windowed"
+        assert window.root.x() == 60
         window.root.showMaximized()
         spin(app, lambda: window.root.visibility().name == "Maximized")
     finally:

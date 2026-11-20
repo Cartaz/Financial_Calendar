@@ -104,17 +104,19 @@ class CalendarAdapter(QObject):
 
     @Slot(int)
     def sortColumn(self, column):
-        if 0 <= column < len(self.table.columns):
-            self.change("sort", self.table.columns[column])
+        shown = self.table.columns
+        if 0 <= column < len(shown):
+            self.queue.submit(
+                lambda: self.service.sort_column(column, shown), self._received
+            )
 
     @Slot(int, int)
     def moveColumn(self, old, new):
-        columns = self.table.columns
-        if old == new or not (0 <= old < len(columns) and 0 <= new < len(columns)):
+        shown = self.table.columns
+        if old == new or not (0 <= old < len(shown) and 0 <= new < len(shown)):
             return
-        column, target = columns[old], columns[new]
         self.queue.submit(
-            lambda: self.service.move_column(column, target), self._received
+            lambda: self.service.move_column(old, new, shown), self._received
         )
 
     @Slot(str)
