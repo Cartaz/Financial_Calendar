@@ -6,7 +6,6 @@ import time
 from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
 
-from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from core.cache import CalendarCache
@@ -23,12 +22,6 @@ class FakeNotifier:
         del timeout_ms
         self.messages.append((title, body))
         return True
-
-
-def _redirect_paths(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(PathConfig, "SETTINGS_FILE", tmp_path / "settings.json")
 
 
 def _event(source: CalendarSource, name: str, *, minutes: int = 4) -> CalendarEvent:
@@ -58,7 +51,6 @@ def _seed(source: CalendarSource, events: list[CalendarEvent]) -> None:
 def test_combined_source_merges_and_annotates_real_events(
     monkeypatch, tmp_path
 ) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     _seed(
         CalendarSource.FOREXFACTORY,
         [_event(CalendarSource.FOREXFACTORY, "Nonfarm Payrolls", minutes=60)],
@@ -90,7 +82,6 @@ def test_combined_source_merges_and_annotates_real_events(
 def test_high_notifications_are_optional_and_deduplicated_across_sources(
     monkeypatch, tmp_path
 ) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     app = QApplication.instance() or QApplication([])
     assert app is not None
 
@@ -137,7 +128,6 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(
 
 
 def test_notification_time_uses_the_configured_timezone(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     app = QApplication.instance() or QApplication([])
     event = _event(CalendarSource.FXSTREET, "CPI")
     _seed(CalendarSource.FXSTREET, [event])

@@ -9,14 +9,6 @@ from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 
 
-def _redirect_paths(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path / "config")
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(
-        PathConfig, "SETTINGS_FILE", tmp_path / "config" / "settings.json"
-    )
-
-
 def _event(source: CalendarSource = CalendarSource.FOREXFACTORY) -> CalendarEvent:
     event_dt = datetime.now(timezone.utc) + timedelta(hours=2)
     return CalendarEvent(
@@ -36,7 +28,6 @@ def _event(source: CalendarSource = CalendarSource.FOREXFACTORY) -> CalendarEven
 def test_cache_round_trip_preserves_real_event_data(
     monkeypatch, tmp_path, caplog
 ) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     cache = CalendarCache()
     refreshed_at = "2026-08-21T10:30:00+00:00"
 
@@ -65,7 +56,6 @@ def test_cache_round_trip_preserves_real_event_data(
 def test_corrupt_cache_is_ignored_without_fabricating_data(
     monkeypatch, tmp_path
 ) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     PathConfig.ensure_dirs()
     path = PathConfig.APP_DATA_DIR / "calendar_fxstreet.json"
     path.write_text("{not-json", encoding="utf-8")

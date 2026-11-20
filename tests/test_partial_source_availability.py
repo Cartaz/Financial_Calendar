@@ -9,16 +9,6 @@ from core.app_controller import AppController
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 
 
-def _redirect_paths(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path / "config")
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(
-        PathConfig,
-        "SETTINGS_FILE",
-        tmp_path / "config" / "settings.json",
-    )
-
-
 def _future_event() -> CalendarEvent:
     event_dt = datetime.now(timezone.utc) + timedelta(hours=2)
     return CalendarEvent(
@@ -39,7 +29,6 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
     monkeypatch,
     tmp_path,
 ) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
 
     monkeypatch.setattr(
         app_controller_module,

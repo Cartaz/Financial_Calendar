@@ -10,14 +10,7 @@ from config.constants import COLUMNS, PathConfig
 from config.settings import Settings
 
 
-def _redirect_paths(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(PathConfig, "SETTINGS_FILE", tmp_path / "settings.json")
-
-
 def test_settings_atomic_round_trip(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     assert settings.set("timezone_name", "Europe/Rome")
     assert settings.set("selected_date", "2026-08-24")
@@ -25,11 +18,10 @@ def test_settings_atomic_round_trip(monkeypatch, tmp_path) -> None:
     payload = json.loads(PathConfig.SETTINGS_FILE.read_text(encoding="utf-8"))
     assert payload["timezone_name"] == "Europe/Rome"
     assert payload["selected_date"] == "2026-08-24"
-    assert not list(tmp_path.glob(".settings.*.tmp"))
+    assert not list(PathConfig.APP_CONFIG_DIR.glob(".settings.*.tmp"))
 
 
 def test_settings_concurrent_writers_keep_valid_json(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -44,7 +36,6 @@ def test_settings_concurrent_writers_keep_valid_json(monkeypatch, tmp_path) -> N
 
 
 def test_invalid_schema_falls_back_to_safe_defaults(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     PathConfig.SETTINGS_FILE.write_text(
         json.dumps(
             {
@@ -68,7 +59,6 @@ def test_invalid_schema_falls_back_to_safe_defaults(monkeypatch, tmp_path) -> No
 
 
 def test_settings_load_permission_error_does_not_crash(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     PathConfig.SETTINGS_FILE.write_text("{}", encoding="utf-8")
     real_open = builtins.open
 
@@ -84,14 +74,12 @@ def test_settings_load_permission_error_does_not_crash(monkeypatch, tmp_path) ->
 
 
 def test_column_order_validation(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     assert settings.set("ig_column_order", [0, 4, 1, 2, 3, 5, 6, 7])
     assert settings.get("ig_column_order") == [0, 4, 1, 2, 3, 5, 6, 7]
 
 
 def test_ui_state_batch_round_trip(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     assert settings.set_many(
         {
@@ -120,7 +108,6 @@ def test_ui_state_batch_round_trip(monkeypatch, tmp_path) -> None:
 
 
 def test_ui_state_rejects_unsupported_auto_refresh(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
     with pytest.raises(ValueError):
         settings.set("auto_refresh_minutes", 7)

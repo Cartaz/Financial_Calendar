@@ -14,7 +14,6 @@ from PySide6.QtCore import (
 )
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
-from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from core.cache import CalendarCache
@@ -38,9 +37,6 @@ def spin(app, condition, timeout=4):
 
 @pytest.fixture
 def backend(monkeypatch, tmp_path):
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(PathConfig, "SETTINGS_FILE", tmp_path / "settings.json")
     now = datetime.now(timezone.utc).replace(microsecond=0)
     for source in (CalendarSource.FOREXFACTORY, CalendarSource.FXSTREET):
         events = []

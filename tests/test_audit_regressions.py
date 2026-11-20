@@ -12,16 +12,6 @@ from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 
 
-@pytest.fixture
-def isolated_paths(monkeypatch, tmp_path):
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path / "config")
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(
-        PathConfig, "SETTINGS_FILE", tmp_path / "config" / "settings.json"
-    )
-    PathConfig.ensure_dirs()
-
-
 def event():
     dt = datetime.now(timezone.utc) + timedelta(hours=1)
     return CalendarEvent(

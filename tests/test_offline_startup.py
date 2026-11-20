@@ -2,20 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from config.constants import PathConfig
 from config.settings import Settings
 from core.app_controller import AppController
 from core.cache import CalendarCache
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.calendar_view import CalendarViewService
-
-
-def _redirect_paths(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path / "config")
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(
-        PathConfig, "SETTINGS_FILE", tmp_path / "config" / "settings.json"
-    )
 
 
 def _future_event(
@@ -37,7 +28,6 @@ def _future_event(
 
 
 def test_controller_and_view_start_with_cached_data(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     refreshed_at = "2026-08-21T10:30:00+00:00"
     cache = CalendarCache()
     assert cache.save(CalendarSource.FOREXFACTORY, [_future_event()], refreshed_at)
@@ -59,7 +49,6 @@ def test_controller_and_view_start_with_cached_data(monkeypatch, tmp_path) -> No
 
 
 def test_failed_refresh_keeps_cached_events_available(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     refreshed_at = "2026-08-21T10:30:00+00:00"
     assert CalendarCache().save(
         CalendarSource.FOREXFACTORY,
@@ -86,7 +75,6 @@ def test_failed_refresh_keeps_cached_events_available(monkeypatch, tmp_path) -> 
 def test_successful_refresh_replaces_cache_and_uses_utc_timestamp(
     monkeypatch, tmp_path
 ) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     controller = AppController()
 
     try:

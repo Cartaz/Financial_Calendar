@@ -2,15 +2,8 @@ from __future__ import annotations
 
 import threading
 
-from config.constants import PathConfig
 from core import app_controller
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
-
-
-def _redirect_paths(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(PathConfig, "APP_CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(PathConfig, "APP_DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(PathConfig, "SETTINGS_FILE", tmp_path / "settings.json")
 
 
 def _event() -> CalendarEvent:
@@ -29,7 +22,6 @@ def _event() -> CalendarEvent:
 
 
 def test_shutdown_suppresses_late_worker_notifications(monkeypatch, tmp_path) -> None:
-    _redirect_paths(monkeypatch, tmp_path)
     started = threading.Event()
     release = threading.Event()
 
