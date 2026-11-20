@@ -4,7 +4,6 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from config.constants import PathConfig
-from config.settings import Settings
 from core import app_controller as app_controller_module
 from core.app_controller import AppController
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
@@ -55,7 +54,7 @@ def test_refresh_all_keeps_available_source_when_other_source_fails(
         app_controller_module, "scrape_fxstreet_calendar", fail_fxstreet
     )
 
-    controller = AppController(Settings())
+    controller = AppController()
     notifications: list[tuple[str, dict]] = []
     completed = threading.Event()
 

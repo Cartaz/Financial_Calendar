@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 from config.constants import PathConfig
+from config.storage import atomic_write_text
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 from core.scraper_metrics import ScrapeMetrics
 from core.time_utils import try_parse_utc
@@ -168,33 +167,14 @@ class CalendarCache:
             "events": [_event_to_dict(event) for event in events],
         }
 
-        temp_path: Path | None = None
         with self._lock:
             try:
-                PathConfig.ensure_dirs()
-                with tempfile.NamedTemporaryFile(
-                    mode="w",
-                    encoding="utf-8",
-                    dir=PathConfig.APP_DATA_DIR,
-                    prefix=f".calendar_{source.value}.",
-                    suffix=".tmp",
-                    delete=False,
-                ) as handle:
-                    temp_path = Path(handle.name)
-                    json.dump(
-                        payload, handle, ensure_ascii=False, separators=(",", ":")
-                    )
-                    handle.flush()
-                    os.fsync(handle.fileno())
-
-                os.replace(temp_path, self._path(source))
+                atomic_write_text(
+                    self._path(source),
+                    json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                )
             except OSError as exc:
                 logger.error("Errore salvataggio cache %s: %s", source.value, exc)
-                if temp_path is not None:
-                    try:
-                        temp_path.unlink(missing_ok=True)
-                    except OSError:
-                        logger.exception("Impossibile eliminare cache temporanea")
                 return False
 
         logger.debug("Cache %s salvata con %d eventi", source.value, len(events))

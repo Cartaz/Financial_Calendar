@@ -68,7 +68,7 @@ def test_combined_source_merges_and_annotates_real_events(
         [_event(CalendarSource.FXSTREET, "US Nonfarm Payrolls", minutes=60)],
     )
     settings = Settings()
-    controller = AppController(settings)
+    controller = AppController()
     view = CalendarViewService(controller, settings)
     try:
         view.change("active_source", "combined")
@@ -103,7 +103,7 @@ def test_high_notifications_are_optional_and_deduplicated_across_sources(
         [_event(CalendarSource.FXSTREET, "Nonfarm Payrolls")],
     )
     settings = Settings()
-    controller = AppController(settings)
+    controller = AppController()
     controller.refresh_all = lambda: None
     notifier = FakeNotifier()
     runtime = CalendarRuntime(controller, settings, notifier=notifier)
@@ -145,7 +145,7 @@ def test_notification_time_uses_the_configured_timezone(monkeypatch, tmp_path) -
     assert settings.set_many(
         {"timezone_name": "UTC+05:30", "high_notification_minutes": 5}
     )
-    controller = AppController(settings)
+    controller = AppController()
     controller.refresh_all = lambda: None
     notifier = FakeNotifier()
     runtime = CalendarRuntime(controller, settings, notifier=notifier)

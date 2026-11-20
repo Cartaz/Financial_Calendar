@@ -19,12 +19,12 @@ def _redirect_paths(monkeypatch, tmp_path) -> None:
 def test_settings_atomic_round_trip(monkeypatch, tmp_path) -> None:
     _redirect_paths(monkeypatch, tmp_path)
     settings = Settings()
-    assert settings.set("last_refresh_ig", "A")
-    assert settings.set("last_refresh_fxstreet", "B")
+    assert settings.set("timezone_name", "Europe/Rome")
+    assert settings.set("selected_date", "2026-08-24")
 
     payload = json.loads(PathConfig.SETTINGS_FILE.read_text(encoding="utf-8"))
-    assert payload["last_refresh_ig"] == "A"
-    assert payload["last_refresh_fxstreet"] == "B"
+    assert payload["timezone_name"] == "Europe/Rome"
+    assert payload["selected_date"] == "2026-08-24"
     assert not list(tmp_path.glob(".settings.*.tmp"))
 
 
@@ -33,14 +33,14 @@ def test_settings_concurrent_writers_keep_valid_json(monkeypatch, tmp_path) -> N
     settings = Settings()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        first = executor.submit(settings.set, "last_refresh_ig", "IG")
-        second = executor.submit(settings.set, "last_refresh_fxstreet", "FX")
+        first = executor.submit(settings.set, "ig_sort_key", "impact")
+        second = executor.submit(settings.set, "fxstreet_sort_key", "date")
         assert first.result()
         assert second.result()
 
     payload = json.loads(PathConfig.SETTINGS_FILE.read_text(encoding="utf-8"))
-    assert payload["last_refresh_ig"] == "IG"
-    assert payload["last_refresh_fxstreet"] == "FX"
+    assert payload["ig_sort_key"] == "impact"
+    assert payload["fxstreet_sort_key"] == "date"
 
 
 def test_invalid_schema_falls_back_to_safe_defaults(monkeypatch, tmp_path) -> None:
@@ -80,7 +80,7 @@ def test_settings_load_permission_error_does_not_crash(monkeypatch, tmp_path) ->
     monkeypatch.setattr(builtins, "open", denied)
     settings = Settings()
     settings.load()
-    assert settings.get("last_refresh_ig") == ""
+    assert settings.get("timezone_name") == "local"
 
 
 def test_column_order_validation(monkeypatch, tmp_path) -> None:

@@ -3,6 +3,7 @@
 from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer
 from config.constants import CalendarDefaults
 from core.calendar_view import CalendarViewService
+from core.models import CalendarSource
 from ui.models import CalendarTableModel, RecordListModel
 
 REGIONS = list(CalendarDefaults.REGIONS)
@@ -120,11 +121,10 @@ class CalendarAdapter(QObject):
     def refresh(self, source):
         if source == "combined":
             self.controller.refresh_all()
-        elif source == "ig":
-            self.controller.refresh_ig()
-        elif source == "fxstreet":
-            self.controller.refresh_fxstreet()
-        else:
+            return
+        try:
+            self.controller.refresh(CalendarSource(source))
+        except ValueError:
             self.message.emit("Sorgente non valida")
 
     def stop(self):

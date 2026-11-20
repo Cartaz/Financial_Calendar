@@ -73,7 +73,7 @@ def backend(monkeypatch, tmp_path):
             "timezone_name": "UTC",
         }
     )
-    controller = AppController(settings)
+    controller = AppController()
     monkeypatch.setattr(controller, "refresh_all", lambda: None)
     yield controller, settings
     controller.shutdown()

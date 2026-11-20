@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 import threading
 from dataclasses import asdict, dataclass, field, fields
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 from config.constants import COLUMNS, SOURCES, CalendarDefaults, PathConfig
+from config.storage import atomic_write_text
 from config.timezones import validate_timezone
 
 logger = logging.getLogger(__name__)
@@ -40,9 +38,6 @@ class UserSettings:
     fxstreet_selected_impact: str = "ALL"
     combined_selected_region: str = "ALL"
     combined_selected_impact: str = "ALL"
-
-    last_refresh_ig: str = ""
-    last_refresh_fxstreet: str = ""
 
     active_source: str = "ig"
     timezone_name: str = "local"
@@ -115,9 +110,6 @@ def _normalize_setting(key: str, value: Any) -> Any:
         text = str(value)
         allowed = {"ALL", *CalendarDefaults.IMPACT_LEVELS}
         return text if text in allowed else "ALL"
-
-    if key in {"last_refresh_ig", "last_refresh_fxstreet"}:
-        return str(value)
 
     if key == "active_source":
         text = str(value)
@@ -215,34 +207,16 @@ class Settings:
                 self._data = UserSettings()
 
     def _save_locked(self) -> bool:
-        temp_path: Path | None = None
         try:
-            PathConfig.ensure_dirs()
-            payload = asdict(self._data)
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                dir=PathConfig.APP_CONFIG_DIR,
-                prefix=".settings.",
-                suffix=".tmp",
-                delete=False,
-            ) as handle:
-                temp_path = Path(handle.name)
-                json.dump(payload, handle, indent=2, ensure_ascii=False)
-                handle.flush()
-                os.fsync(handle.fileno())
-
-            os.replace(temp_path, PathConfig.SETTINGS_FILE)
-            logger.debug("Impostazioni salvate in %s", PathConfig.SETTINGS_FILE)
-            return True
+            atomic_write_text(
+                PathConfig.SETTINGS_FILE,
+                json.dumps(asdict(self._data), indent=2, ensure_ascii=False),
+            )
         except OSError as exc:
             logger.error("Errore nel salvataggio delle impostazioni: %s", exc)
-            if temp_path is not None:
-                try:
-                    temp_path.unlink(missing_ok=True)
-                except OSError:
-                    logger.exception("Impossibile eliminare il file temporaneo")
             return False
+        logger.debug("Impostazioni salvate in %s", PathConfig.SETTINGS_FILE)
+        return True
 
     def save(self) -> bool:
         with self._lock:

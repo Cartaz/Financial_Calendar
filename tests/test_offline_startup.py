@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import threading
-from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
 
 from config.constants import PathConfig
@@ -45,7 +43,7 @@ def test_controller_and_view_start_with_cached_data(monkeypatch, tmp_path) -> No
     assert cache.save(CalendarSource.FOREXFACTORY, [_future_event()], refreshed_at)
 
     settings = Settings()
-    controller = AppController(settings)
+    controller = AppController()
     view = CalendarViewService(controller, settings)
     try:
         assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "cache"
@@ -69,17 +67,11 @@ def test_failed_refresh_keeps_cached_events_available(monkeypatch, tmp_path) -> 
         refreshed_at,
     )
 
-    controller = AppController(Settings())
-    future: Future = Future()
-    future.set_exception(RuntimeError("offline"))
-    refreshing = threading.Event()
-    refreshing.set()
+    controller = AppController()
 
     try:
         controller._complete_refresh(  # noqa: SLF001 - deterministic lifecycle test
-            future,
-            CalendarSource.FOREXFACTORY,
-            refreshing,
+            CalendarSource.FOREXFACTORY, error=RuntimeError("offline")
         )
 
         assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "cache"
@@ -95,26 +87,18 @@ def test_successful_refresh_replaces_cache_and_uses_utc_timestamp(
     monkeypatch, tmp_path
 ) -> None:
     _redirect_paths(monkeypatch, tmp_path)
-    settings = Settings()
-    controller = AppController(settings)
-    future: Future = Future()
-    future.set_result([_future_event()])
-    refreshing = threading.Event()
-    refreshing.set()
+    controller = AppController()
 
     try:
         controller._complete_refresh(  # noqa: SLF001 - deterministic lifecycle test
-            future,
-            CalendarSource.FOREXFACTORY,
-            refreshing,
+            CalendarSource.FOREXFACTORY, events=[_future_event()]
         )
 
-        assert refreshing.is_set() is False
+        assert not controller.is_refreshing(CalendarSource.FOREXFACTORY)
         assert controller.get_data_origin(CalendarSource.FOREXFACTORY) == "network"
         refreshed_at = controller.get_last_refresh(CalendarSource.FOREXFACTORY)
         parsed = datetime.fromisoformat(refreshed_at)
         assert parsed.utcoffset() == timedelta(0)
-        assert settings.get("last_refresh_ig") == refreshed_at
 
         snapshot = CalendarCache().load(CalendarSource.FOREXFACTORY)
         assert snapshot is not None

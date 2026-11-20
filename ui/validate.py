@@ -34,7 +34,7 @@ def main():
         PathConfig.APP_DATA_DIR = Path(directory) / "data"
         PathConfig.SETTINGS_FILE = Path(directory) / "settings.json"
         settings = Settings()
-        controller = AppController(settings)
+        controller = AppController()
         window = CalendarWindow(controller, settings, autostart=False)
         window.show()
 

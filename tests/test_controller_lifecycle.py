@@ -3,7 +3,6 @@ from __future__ import annotations
 import threading
 
 from config.constants import PathConfig
-from config.settings import Settings
 from core import app_controller
 from core.models import CalendarEvent, CalendarSource, ImpactLevel
 
@@ -41,13 +40,13 @@ def test_shutdown_suppresses_late_worker_notifications(monkeypatch, tmp_path) ->
 
     monkeypatch.setattr(app_controller, "scrape_ig_calendar", slow_scraper)
 
-    controller = app_controller.AppController(Settings())
+    controller = app_controller.AppController()
     notifications = []
     controller.set_notification_callback(
         lambda name, payload: notifications.append((name, payload))
     )
 
-    controller.refresh_ig()
+    controller.refresh(CalendarSource.FOREXFACTORY)
     assert started.wait(timeout=1)
     controller.begin_shutdown()
     release.set()

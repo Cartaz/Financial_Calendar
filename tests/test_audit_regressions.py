@@ -45,7 +45,7 @@ def test_fast_refresh_completion_does_not_persist_on_caller_thread(
     monkeypatch.setattr(
         app_controller, "scrape_ig_calendar", lambda **kwargs: [event()]
     )
-    controller = app_controller.AppController(Settings())
+    controller = app_controller.AppController()
     real_submit = controller._executor.submit
 
     def already_completed(*args, **kwargs):
@@ -60,7 +60,7 @@ def test_fast_refresh_completion_does_not_persist_on_caller_thread(
         lambda *args: saved_on.append(threading.get_ident()) or True,
     )
     try:
-        controller.refresh_ig()
+        controller.refresh(CalendarSource.FOREXFACTORY)
         assert saved_on and caller not in saved_on
         assert not controller.is_refreshing(CalendarSource.FOREXFACTORY)
     finally:

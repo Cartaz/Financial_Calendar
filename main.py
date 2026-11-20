@@ -39,7 +39,7 @@ def main() -> int:
     app.setDesktopFileName("financial_calendar")
     app.setQuitOnLastWindowClosed(True)
 
-    controller = AppController(settings, debug=args.debug)
+    controller = AppController(debug=args.debug)
     app.aboutToQuit.connect(controller.begin_shutdown)
 
     try:
